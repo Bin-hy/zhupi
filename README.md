@@ -197,7 +197,9 @@ docker compose up -d
 docker compose logs -f zhupi
 ```
 
-可用 tag：`latest`（最新 release）、`0.2` / `0.2.0`（具体版本）、`edge`（main 最新构建）。
+可用 tag：`latest`（最新 release，amd64 + arm64）、`0.2` / `0.2.0`（具体版本）、
+`edge`（main 最新构建，仅 amd64）。
+首个 release tag 之前还没有 `latest`，可先用 `ZHUPI_TAG=edge docker compose pull`。
 
 GHCR 包默认是 private。首次使用需在仓库的 Packages 设置里把 `zhupi` 改为 public；
 若保持 private，先登录再拉取：

@@ -1,7 +1,8 @@
 services:
   zhupi:
     # 默认使用 GHCR 已发布镜像；本地构建用 docker compose up -d --build
-    image: ghcr.io/bin-hy/zhupi:latest
+    # 可用 ZHUPI_TAG 覆盖 tag，例如 ZHUPI_TAG=edge
+    image: ghcr.io/bin-hy/zhupi:${ZHUPI_TAG:-latest}
     build: .
     restart: unless-stopped
     env_file: .env

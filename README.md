@@ -201,8 +201,7 @@ docker compose logs -f zhupi
 `edge`（main 最新构建，仅 amd64）。
 首个 release tag 之前还没有 `latest`，可先用 `ZHUPI_TAG=edge docker compose pull`。
 
-GHCR 包默认是 private。首次使用需在仓库的 Packages 设置里把 `zhupi` 改为 public；
-若保持 private，先登录再拉取：
+GHCR 包已设为 public，可匿名拉取。若之后改回 private，先登录再拉取：
 
 ```bash
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u <你的 GitHub 用户名> --password-stdin

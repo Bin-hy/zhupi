@@ -146,15 +146,28 @@ func (s *Store) ListAnnotations(ctx context.Context, q AnnotationQuery) ([]domai
 		}
 	}
 
-	conds = append(conds, "a.id > ?")
-	args = append(args, q.Cursor)
+	sort := q.Sort
+	if !sort.Valid() {
+		sort = domain.SortPosition
+	}
+	order := "a.id ASC"
+	if sort == domain.SortNewest {
+		if q.Cursor > 0 {
+			conds = append(conds, "a.id < ?")
+			args = append(args, q.Cursor)
+		}
+		order = "a.id DESC"
+	} else {
+		conds = append(conds, "a.id > ?")
+		args = append(args, q.Cursor)
+	}
 	args = append(args, limit+1)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+annotationSelect+`
 		FROM annotations a JOIN users u ON u.id = a.created_by
 		WHERE `+strings.Join(conds, " AND ")+`
-		ORDER BY a.id ASC LIMIT ?`, args...)
+		ORDER BY `+order+` LIMIT ?`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -214,15 +227,23 @@ func (s *Store) UpdateAnnotationAnchor(ctx context.Context, siteID, id int64, an
 	return nil
 }
 
-func (s *Store) ListAnnotationsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, cursor int64, limit int) ([]domain.Annotation, int64, error) {
+func (s *Store) ListAnnotationsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, keyword string, cursor int64, limit int) ([]domain.Annotation, int64, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	conds := []string{"a.site_id = ?", "a.moderation = ?", "a.visibility <> 'deleted'", "a.id > ?"}
+	args := []any{siteID, status, cursor}
+	if keyword != "" {
+		like := likePattern(keyword)
+		conds = append(conds, `(a.quote_exact LIKE ? ESCAPE '\' OR a.page_title LIKE ? ESCAPE '\' OR a.section LIKE ? ESCAPE '\' OR u.display_name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM comments c2 WHERE c2.annotation_id = a.id AND c2.content LIKE ? ESCAPE '\'))`)
+		args = append(args, like, like, like, like, like)
+	}
+	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+annotationSelect+`
 		FROM annotations a JOIN users u ON u.id = a.created_by
-		WHERE a.site_id = ? AND a.moderation = ? AND a.visibility <> 'deleted' AND a.id > ?
-		ORDER BY a.id ASC LIMIT ?`, siteID, status, cursor, limit+1)
+		WHERE `+strings.Join(conds, " AND ")+`
+		ORDER BY a.id ASC LIMIT ?`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -260,6 +281,64 @@ func (s *Store) ListAnnotationsForModeration(ctx context.Context, siteID int64, 
 		}
 	}
 	return out, next, nil
+}
+
+// AnnotationsByIDs 批量读取批注，用于给评论审核队列补全父批注上下文。
+func (s *Store) AnnotationsByIDs(ctx context.Context, siteID int64, ids []int64) (map[int64]domain.Annotation, error) {
+	out := make(map[int64]domain.Annotation, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := append([]any{siteID}, int64Args(ids)...)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+annotationSelect+`
+		FROM annotations a JOIN users u ON u.id = a.created_by
+		WHERE a.site_id = ? AND `+inClause("a.id", len(ids)), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		a, err := scanAnnotationRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[a.ID] = a
+	}
+	return out, rows.Err()
+}
+
+// CountAnnotationsForModeration 返回各审核状态下的批注数量。
+func (s *Store) CountAnnotationsForModeration(ctx context.Context, siteID int64) (map[domain.ModerationStatus]int, error) {
+	out := map[domain.ModerationStatus]int{
+		domain.ModerationPending: 0, domain.ModerationApproved: 0, domain.ModerationRejected: 0,
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT moderation, COUNT(*)
+		FROM annotations
+		WHERE site_id = ? AND visibility <> 'deleted'
+		GROUP BY moderation`, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status domain.ModerationStatus
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, err
+		}
+		out[status] = n
+	}
+	return out, rows.Err()
+}
+
+// likePattern 构造 SQLite LIKE 模式，转义通配符，配合 ESCAPE '\' 使用。
+func likePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return "%" + s + "%"
 }
 
 func (s *Store) UpdateAnnotationStatus(ctx context.Context, siteID, id int64, status domain.AnnotationStatus) error {
@@ -353,4 +432,41 @@ func (s *Store) CountPageAnnotations(ctx context.Context, siteID int64, pageKey 
 			AND ((a.moderation = 'approved' AND a.visibility = 'visible') OR a.created_by = ? OR ? = 1)`,
 		siteID, pageKey, viewerID, include).Scan(&n)
 	return n, err
+}
+
+// CountPageAnnotationsByFilter 一次查询返回当前页各筛选条件下的条数，供面板标签展示。
+func (s *Store) CountPageAnnotationsByFilter(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (map[domain.ListFilter]int, error) {
+	out := map[domain.ListFilter]int{
+		domain.ListAll: 0, domain.ListMine: 0, domain.ListResolved: 0, domain.ListPending: 0,
+	}
+	if pageKey == "" {
+		return out, nil
+	}
+	visible := "((a.moderation = 'approved' AND a.visibility = 'visible') OR a.created_by = ?)"
+	args := []any{}
+	if includeUnapproved {
+		visible = "1 = 1"
+	} else {
+		// visible 条件在 SQL 中出现两次，需要两个占位参数。
+		args = append(args, viewerID, viewerID)
+	}
+	args = append(args, viewerID, viewerID, siteID, pageKey)
+	var all, mine, resolved, pending int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN `+visible+` THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN a.created_by = ? THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN `+visible+` AND a.status = 'resolved' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN a.created_by = ? AND a.moderation = 'pending' THEN 1 ELSE 0 END), 0)
+		FROM annotations a
+		WHERE a.site_id = ? AND a.page_key = ? AND a.visibility <> 'deleted'`,
+		args...).Scan(&all, &mine, &resolved, &pending)
+	if err != nil {
+		return nil, err
+	}
+	out[domain.ListAll] = all
+	out[domain.ListMine] = mine
+	out[domain.ListResolved] = resolved
+	out[domain.ListPending] = pending
+	return out, nil
 }

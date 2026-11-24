@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/Bin-hy/zhupi/internal/domain"
@@ -84,15 +85,23 @@ func (s *Store) ListCommentsByAnnotation(ctx context.Context, siteID, annotation
 	return out, rows.Err()
 }
 
-func (s *Store) ListCommentsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, cursor int64, limit int) ([]domain.Comment, int64, error) {
+func (s *Store) ListCommentsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, keyword string, cursor int64, limit int) ([]domain.Comment, int64, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	conds := []string{"c.site_id = ?", "c.moderation = ?", "c.visibility <> 'deleted'", "c.id > ?"}
+	args := []any{siteID, status, cursor}
+	if keyword != "" {
+		like := likePattern(keyword)
+		conds = append(conds, `(c.content LIKE ? ESCAPE '\' OR u.display_name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM annotations a2 WHERE a2.id = c.annotation_id AND (a2.quote_exact LIKE ? ESCAPE '\' OR a2.page_title LIKE ? ESCAPE '\')))`)
+		args = append(args, like, like, like, like)
+	}
+	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+commentSelect+`
 		FROM comments c JOIN users u ON u.id = c.user_id
-		WHERE c.site_id = ? AND c.moderation = ? AND c.visibility <> 'deleted' AND c.id > ?
-		ORDER BY c.id ASC LIMIT ?`, siteID, status, cursor, limit+1)
+		WHERE `+strings.Join(conds, " AND ")+`
+		ORDER BY c.id ASC LIMIT ?`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -114,6 +123,31 @@ func (s *Store) ListCommentsForModeration(ctx context.Context, siteID int64, sta
 		out = out[:limit]
 	}
 	return out, next, nil
+}
+
+// CountCommentsForModeration 返回各审核状态下的评论数量。
+func (s *Store) CountCommentsForModeration(ctx context.Context, siteID int64) (map[domain.ModerationStatus]int, error) {
+	out := map[domain.ModerationStatus]int{
+		domain.ModerationPending: 0, domain.ModerationApproved: 0, domain.ModerationRejected: 0,
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT moderation, COUNT(*)
+		FROM comments
+		WHERE site_id = ? AND visibility <> 'deleted'
+		GROUP BY moderation`, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status domain.ModerationStatus
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, err
+		}
+		out[status] = n
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) SetCommentModeration(ctx context.Context, siteID, id int64, m domain.ModerationStatus) error {

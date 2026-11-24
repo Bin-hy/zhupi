@@ -29,11 +29,13 @@ func (s *Server) handleListAnnotations(w http.ResponseWriter, r *http.Request) {
 	p, _ := PrincipalFrom(r.Context())
 	pageKey := r.URL.Query().Get("page")
 	filter := domain.ListFilter(r.URL.Query().Get("filter"))
+	sort := domain.AnnotationSort(r.URL.Query().Get("sort"))
 	cursor := queryInt64(r, "cursor", 0)
 	limit := int(queryInt64(r, "limit", 100))
 	result, err := s.annotations.ListPage(r.Context(), p, site, service.ListInput{
 		PageKey: pageKey,
 		Filter:  filter,
+		Sort:    sort,
 		Cursor:  cursor,
 		Limit:   limit,
 	})

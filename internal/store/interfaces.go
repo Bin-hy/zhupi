@@ -67,6 +67,7 @@ type AnnotationQuery struct {
 	PageKey           string
 	ViewerID          int64
 	Filter            domain.ListFilter
+	Sort              domain.AnnotationSort
 	IncludeUnapproved bool
 	Cursor            int64
 	Limit             int
@@ -75,9 +76,12 @@ type AnnotationQuery struct {
 type AnnotationRepo interface {
 	CreateAnnotation(ctx context.Context, a domain.Annotation, firstComment string) (domain.Annotation, error)
 	AnnotationByID(ctx context.Context, siteID, id int64) (domain.Annotation, error)
+	AnnotationsByIDs(ctx context.Context, siteID int64, ids []int64) (map[int64]domain.Annotation, error)
 	ListAnnotations(ctx context.Context, q AnnotationQuery) ([]domain.Annotation, int64, error)
 	CountPageAnnotations(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (int, error)
-	ListAnnotationsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, cursor int64, limit int) ([]domain.Annotation, int64, error)
+	CountPageAnnotationsByFilter(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (map[domain.ListFilter]int, error)
+	ListAnnotationsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, keyword string, cursor int64, limit int) ([]domain.Annotation, int64, error)
+	CountAnnotationsForModeration(ctx context.Context, siteID int64) (map[domain.ModerationStatus]int, error)
 	UpdateAnnotationStatus(ctx context.Context, siteID, id int64, status domain.AnnotationStatus) error
 	UpdateAnnotationAnchor(ctx context.Context, siteID, id int64, a domain.Anchor) error
 	SetAnnotationVisibility(ctx context.Context, siteID, id int64, v domain.Visibility) error
@@ -89,7 +93,8 @@ type CommentRepo interface {
 	CreateComment(ctx context.Context, c domain.Comment) (domain.Comment, error)
 	CommentByID(ctx context.Context, siteID, id int64) (domain.Comment, error)
 	ListCommentsByAnnotation(ctx context.Context, siteID, annotationID, viewerID int64, includeUnapproved bool) ([]domain.Comment, error)
-	ListCommentsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, cursor int64, limit int) ([]domain.Comment, int64, error)
+	ListCommentsForModeration(ctx context.Context, siteID int64, status domain.ModerationStatus, keyword string, cursor int64, limit int) ([]domain.Comment, int64, error)
+	CountCommentsForModeration(ctx context.Context, siteID int64) (map[domain.ModerationStatus]int, error)
 	SetCommentModeration(ctx context.Context, siteID, id int64, m domain.ModerationStatus) error
 	SoftDeleteComment(ctx context.Context, siteID, id int64) error
 }

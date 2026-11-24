@@ -95,3 +95,16 @@ const (
 func (f ListFilter) Valid() bool {
 	return f == ListAll || f == ListMine || f == ListResolved || f == ListPending
 }
+
+// AnnotationSort 是批注列表的排序方式。
+// position 按文档位置（写入顺序）排列，newest 按发布时间倒序。
+type AnnotationSort string
+
+const (
+	SortPosition AnnotationSort = "position"
+	SortNewest   AnnotationSort = "newest"
+)
+
+func (s AnnotationSort) Valid() bool {
+	return s == SortPosition || s == SortNewest
+}

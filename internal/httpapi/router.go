@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 管理：站点级审核与提供商
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/queue", s.adminSite(s.handleAdminQueue))
+	mux.Handle("GET /api/v1/admin/sites/{siteID}/annotations/{id}", s.adminSite(s.handleAdminAnnotationDetail))
 	mux.Handle("POST /api/v1/admin/sites/{siteID}/annotations/{id}/moderate", s.adminSite(s.handleAdminModerateAnnotation))
 	mux.Handle("POST /api/v1/admin/sites/{siteID}/comments/{id}/moderate", s.adminSite(s.handleAdminModerateComment))
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/bans", s.adminSite(s.handleAdminListBans))

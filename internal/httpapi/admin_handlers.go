@@ -179,7 +179,7 @@ func (s *Server) handleAdminQueue(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = domain.ModerationPending
 	}
-	queue, err := s.moderation.Queue(r.Context(), p, siteID, status,
+	queue, err := s.moderation.Queue(r.Context(), p, siteID, status, r.URL.Query().Get("q"), r.URL.Query().Get("type"),
 		queryInt64(r, "annotationCursor", 0), queryInt64(r, "commentCursor", 0),
 		int(queryInt64(r, "limit", 50)))
 	if err != nil {
@@ -219,6 +219,30 @@ func (s *Server) handleAdminModerateAnnotation(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"action": req.Action})
+}
+
+func (s *Server) handleAdminAnnotationDetail(w http.ResponseWriter, r *http.Request) {
+	siteID, ok := parseID(r.PathValue("siteID"))
+	if !ok {
+		s.writeErr(w, r, domain.Invalid("validation_error", "非法的站点 ID"))
+		return
+	}
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		s.writeErr(w, r, domain.Invalid("validation_error", "非法的批注 ID"))
+		return
+	}
+	p, err := s.requireModerator(r, siteID)
+	if err != nil {
+		s.writeErr(w, r, err)
+		return
+	}
+	a, err := s.moderation.AnnotationDetail(r.Context(), p, siteID, id)
+	if err != nil {
+		s.writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
 }
 
 func (s *Server) handleAdminModerateComment(w http.ResponseWriter, r *http.Request) {

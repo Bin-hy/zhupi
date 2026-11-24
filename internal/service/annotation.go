@@ -28,6 +28,7 @@ type CreateAnnotationInput struct {
 type ListInput struct {
 	PageKey string
 	Filter  domain.ListFilter
+	Sort    domain.AnnotationSort
 	Cursor  int64
 	Limit   int
 }
@@ -41,6 +42,15 @@ type PageResult struct {
 	Annotations []domain.Annotation `json:"annotations"`
 	NextCursor  int64               `json:"nextCursor"`
 	Total       int                 `json:"total"`
+	Counts      FilterCounts        `json:"counts"`
+}
+
+// FilterCounts 是当前页在各筛选条件下的条数。
+type FilterCounts struct {
+	All      int `json:"all"`
+	Mine     int `json:"mine"`
+	Resolved int `json:"resolved"`
+	Pending  int `json:"pending"`
 }
 
 func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, site domain.Site, in ListInput) (PageResult, error) {
@@ -55,6 +65,13 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 	if !filter.Valid() {
 		return PageResult{}, domain.Invalid("invalid_filter", "不支持的筛选条件")
 	}
+	sort := in.Sort
+	if sort == "" {
+		sort = domain.SortPosition
+	}
+	if !sort.Valid() {
+		return PageResult{}, domain.Invalid("invalid_sort", "不支持的排序方式")
+	}
 	if (filter == domain.ListMine || filter == domain.ListPending) && p.User.ID == 0 {
 		return PageResult{}, domain.Unauthorized("该筛选需要登录")
 	}
@@ -64,6 +81,7 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 		PageKey:           pageKey,
 		ViewerID:          p.User.ID,
 		Filter:            filter,
+		Sort:              sort,
 		IncludeUnapproved: include,
 		Cursor:            in.Cursor,
 		Limit:             in.Limit,
@@ -71,11 +89,21 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 	if err != nil {
 		return PageResult{}, err
 	}
-	total, err := s.annotations.CountPageAnnotations(ctx, site.ID, pageKey, p.User.ID, include)
+	counts, err := s.annotations.CountPageAnnotationsByFilter(ctx, site.ID, pageKey, p.User.ID, include)
 	if err != nil {
 		return PageResult{}, err
 	}
-	return PageResult{Annotations: list, NextCursor: next, Total: total}, nil
+	return PageResult{
+		Annotations: list,
+		NextCursor:  next,
+		Total:       counts[domain.ListAll],
+		Counts: FilterCounts{
+			All:      counts[domain.ListAll],
+			Mine:     counts[domain.ListMine],
+			Resolved: counts[domain.ListResolved],
+			Pending:  counts[domain.ListPending],
+		},
+	}, nil
 }
 
 func (s *AnnotationService) Create(ctx context.Context, p domain.Principal, site domain.Site, in CreateAnnotationInput) (domain.Annotation, error) {

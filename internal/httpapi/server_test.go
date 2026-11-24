@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -229,6 +230,102 @@ func TestModerationApproveShowsFirstComment(t *testing.T) {
 	}
 }
 
+func TestAdminQueueCommentContextCountsAndSearch(t *testing.T) {
+	e := newTestEnv(t)
+	site := e.site(t, "pre", "http://pre.test", domain.ModerationPre)
+	alice := e.login(t, "alice")
+	bob := e.login(t, "bob")
+	_ = e.store.SetUserSuperadmin(context.Background(), 1, true)
+
+	a := e.createAnnotation(t, alice, site, "http://pre.test", "批注正文", "被引用的原文")
+	resp, body := e.do(t, http.MethodPost, "/api/v1/admin/sites/"+itoa(site.ID)+"/annotations/"+itoa(a.ID)+"/moderate",
+		alice, "", "", map[string]any{"action": "approve"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("approve annotation: %d %s", resp.StatusCode, body)
+	}
+	resp, body = e.do(t, http.MethodPost, "/api/v1/annotations/"+itoa(a.ID)+"/comments", bob, site.Key, "http://pre.test",
+		map[string]any{"content": "这是一条待审评论"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create comment: %d %s", resp.StatusCode, body)
+	}
+
+	type queueResult struct {
+		Annotations []domain.Annotation `json:"annotations"`
+		Comments    []struct {
+			domain.Comment
+			Parent *struct {
+				ID         int64  `json:"id"`
+				PageKey    string `json:"pageKey"`
+				PageTitle  string `json:"pageTitle"`
+				QuoteExact string `json:"quoteExact"`
+			} `json:"parent"`
+		} `json:"comments"`
+		Counts struct {
+			Annotations struct{ Pending, Approved, Rejected int } `json:"annotations"`
+			Comments    struct{ Pending, Approved, Rejected int } `json:"comments"`
+		} `json:"counts"`
+	}
+	get := func(query string) queueResult {
+		t.Helper()
+		resp, body := e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(site.ID)+"/queue?status=pending"+query, alice, "", "", nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("queue %s: %d %s", query, resp.StatusCode, body)
+		}
+		var out queueResult
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatalf("decode queue: %v", err)
+		}
+		return out
+	}
+
+	queue := get("")
+	if len(queue.Comments) != 1 || queue.Comments[0].Parent == nil {
+		t.Fatalf("expected comment with parent context: %+v", queue.Comments)
+	}
+	if queue.Comments[0].Parent.ID != a.ID || queue.Comments[0].Parent.QuoteExact != "被引用的原文" || queue.Comments[0].Parent.PageKey != "/doc" {
+		t.Fatalf("unexpected parent: %+v", queue.Comments[0].Parent)
+	}
+	if queue.Counts.Annotations.Approved != 1 || queue.Counts.Comments.Pending != 1 {
+		t.Fatalf("unexpected counts: %+v", queue.Counts)
+	}
+
+	if got := get("&q=" + url.QueryEscape("不存在的词")); len(got.Comments) != 0 || len(got.Annotations) != 0 {
+		t.Fatalf("unexpected search result: %+v", got)
+	}
+	if got := get("&q=" + url.QueryEscape("bob")); len(got.Comments) != 1 {
+		t.Fatalf("author search should match: %+v", got.Comments)
+	}
+	if got := get("&q=" + url.QueryEscape("被引用")); len(got.Comments) != 1 {
+		t.Fatalf("parent quote search should match: %+v", got.Comments)
+	}
+	if got := get("&type=comment"); len(got.Annotations) != 0 || len(got.Comments) != 1 {
+		t.Fatalf("comment-only queue: %+v", got)
+	}
+	if got := get("&type=annotation"); len(got.Annotations) != 0 || len(got.Comments) != 0 {
+		t.Fatalf("annotation-only queue: %+v", got)
+	}
+	resp, _ = e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(site.ID)+"/queue?type=bogus", alice, "", "", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid queue type = %d", resp.StatusCode)
+	}
+
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(site.ID)+"/annotations/"+itoa(a.ID), alice, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("annotation detail: %d %s", resp.StatusCode, body)
+	}
+	var detail domain.Annotation
+	if err := json.Unmarshal(body, &detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if len(detail.Comments) != 2 || detail.Comments[1].Content != "这是一条待审评论" {
+		t.Fatalf("detail should include pending comment: %+v", detail.Comments)
+	}
+	resp, _ = e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(site.ID)+"/annotations/"+itoa(a.ID), bob, "", "", nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-moderator detail status = %d", resp.StatusCode)
+	}
+}
+
 func TestSiteAdminScopeAndBan(t *testing.T) {
 	e := newTestEnv(t)
 	siteA := e.site(t, "a", "http://a.test", domain.ModerationPost)
@@ -364,6 +461,63 @@ func TestListFilters(t *testing.T) {
 	resp, _ = e.do(t, http.MethodGet, "/api/v1/annotations?page=%2Fdoc&filter=bogus", "", site.Key, "http://a.test", nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid filter = %d", resp.StatusCode)
+	}
+}
+
+func TestListCountsAndSort(t *testing.T) {
+	e := newTestEnv(t)
+	site := e.site(t, "a", "http://a.test", domain.ModerationPost)
+	alice := e.login(t, "alice")
+	bob := e.login(t, "bob")
+
+	a1 := e.createAnnotation(t, alice, site, "http://a.test", "alice one", "one")
+	a2 := e.createAnnotation(t, alice, site, "http://a.test", "alice two", "two")
+	a3 := e.createAnnotation(t, bob, site, "http://a.test", "bob three", "three")
+	resp, _ := e.do(t, http.MethodPatch, "/api/v1/annotations/"+itoa(a1.ID), alice, site.Key, "http://a.test", map[string]any{"status": "resolved"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resolve status = %d", resp.StatusCode)
+	}
+
+	type listResult struct {
+		Annotations []domain.Annotation `json:"annotations"`
+		Total       int                 `json:"total"`
+		Counts      struct {
+			All      int `json:"all"`
+			Mine     int `json:"mine"`
+			Resolved int `json:"resolved"`
+			Pending  int `json:"pending"`
+		} `json:"counts"`
+	}
+	get := func(query string) listResult {
+		t.Helper()
+		resp, body := e.do(t, http.MethodGet, "/api/v1/annotations?page=%2Fdoc"+query, alice, site.Key, "http://a.test", nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("list %s: %d %s", query, resp.StatusCode, body)
+		}
+		var out listResult
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatalf("decode %s: %v", query, err)
+		}
+		return out
+	}
+
+	all := get("")
+	if all.Total != 3 || all.Counts.All != 3 || all.Counts.Mine != 2 || all.Counts.Resolved != 1 || all.Counts.Pending != 0 {
+		t.Fatalf("unexpected counts: %+v", all)
+	}
+
+	newest := get("&sort=newest")
+	if len(newest.Annotations) != 3 || newest.Annotations[0].ID != a3.ID {
+		t.Fatalf("newest order = %+v", newest.Annotations)
+	}
+	nextPage := get("&sort=newest&cursor=" + itoa(a3.ID))
+	if len(nextPage.Annotations) != 2 || nextPage.Annotations[0].ID != a2.ID {
+		t.Fatalf("newest cursor order = %+v", nextPage.Annotations)
+	}
+
+	resp, _ = e.do(t, http.MethodGet, "/api/v1/annotations?page=%2Fdoc&sort=bogus", alice, site.Key, "http://a.test", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid sort = %d", resp.StatusCode)
 	}
 }
 

@@ -85,7 +85,6 @@ function goHome(): void {
             autocomplete="current-password"
             show-password
             size="large"
-            @keyup.enter="onLocalLogin"
           />
           <el-button
             type="primary"

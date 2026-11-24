@@ -1,0 +1,33 @@
+# 裸机部署（不用 Docker）时的 systemd 单元示例
+#
+#   sudo cp zhupi /opt/zhupi/zhupi
+#   sudo cp deploy/zhupi.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now zhupi
+#
+# 环境变量写在 /etc/zhupi.env（参考 .env.example），DB_PATH 指向
+# /var/lib/zhupi/zhupi.db。
+
+[Unit]
+Description=Zhupi annotation service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zhupi
+Group=zhupi
+WorkingDirectory=/opt/zhupi
+EnvironmentFile=/etc/zhupi.env
+ExecStart=/opt/zhupi/zhupi
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zhupi
+
+[Install]
+WantedBy=multi-user.target

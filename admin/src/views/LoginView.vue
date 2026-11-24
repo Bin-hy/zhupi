@@ -45,7 +45,7 @@ function goHome(): void {
 <template>
   <div class="login-page">
     <el-card class="login-card" shadow="always">
-      <h1>Annotation Admin</h1>
+      <h1>朱批 · Zhupi</h1>
       <p class="muted">多站点划线批注治理后台</p>
 
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />

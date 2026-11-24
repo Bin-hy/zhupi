@@ -63,9 +63,9 @@
       const siteKey = params.get('siteKey') || 'REPLACE_WITH_SITE_KEY'
 
       const script = document.createElement('script')
-      script.src = apiBase + '/sdk/v1/annotation-sdk.js'
+      script.src = apiBase + '/sdk/v1/zhupi.js'
       script.onload = function () {
-        window.annotationDemo = AnnotationSDK.init({
+        window.annotationDemo = ZhupiSDK.init({
           siteKey: siteKey,
           apiBase: apiBase,
           devLogin: true,

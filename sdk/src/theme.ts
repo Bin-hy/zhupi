@@ -1,6 +1,6 @@
 import type { ThemeMode } from './state'
 
-const prefKey = (apiBase: string, siteKey: string) => `annotation-sdk-theme:${apiBase}:${siteKey}`
+const prefKey = (apiBase: string, siteKey: string) => `zhupi-theme:${apiBase}:${siteKey}`
 
 export function loadThemePreference(apiBase: string, siteKey: string): ThemeMode | null {
   try {

@@ -11,7 +11,7 @@ const API = process.env.ANNOTATION_API || 'http://127.0.0.1:18090'
 const SITE_KEY = required('SITE_KEY')
 const ORIGIN = process.env.SITE_ORIGIN || 'http://127.0.0.1:15174'
 const PAGE = process.env.PAGE || `${ORIGIN}/?siteKey=${SITE_KEY}&api=${API}`
-const TOKEN_KEY = `annotation-sdk:${API}:${SITE_KEY}`
+const TOKEN_KEY = `zhupi:${API}:${SITE_KEY}`
 
 const login=async n=>(await (await fetch(`${API}/api/v1/auth/dev/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})})).json())
 const user=await login('e2e-reloc')

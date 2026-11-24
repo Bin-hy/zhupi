@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/service"
 )
 
 func (s *Server) meta(r *http.Request) service.ClientMeta {

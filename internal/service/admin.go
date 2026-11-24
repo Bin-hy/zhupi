@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/store"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/store"
 )
 
 type AdminService struct {

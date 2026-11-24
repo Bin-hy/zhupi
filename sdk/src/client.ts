@@ -28,7 +28,7 @@ export class AnnotationClient {
   constructor(base: string, siteKey: string) {
     this.base = base.replace(/\/+$/, '')
     this.siteKey = siteKey
-    this.tokenKey = `annotation-sdk:${this.base}:${siteKey}`
+    this.tokenKey = `zhupi:${this.base}:${siteKey}`
   }
 
   getToken(): string | null {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
+	"github.com/Bin-hy/zhupi/internal/service"
 )
 
 func (s *Server) cors(next http.Handler) http.Handler {

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/config"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/ratelimit"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/store"
+	"github.com/Bin-hy/zhupi/internal/config"
+	"github.com/Bin-hy/zhupi/internal/ratelimit"
+	"github.com/Bin-hy/zhupi/internal/service"
+	"github.com/Bin-hy/zhupi/internal/store"
 )
 
 type Server struct {

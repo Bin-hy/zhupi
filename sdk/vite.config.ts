@@ -18,9 +18,9 @@ export default defineConfig({
     sourcemap: true,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'AnnotationSDK',
+      name: 'ZhupiSDK',
       formats: ['es', 'iife'],
-      fileName: (format) => (format === 'es' ? 'annotation-sdk.esm.js' : 'annotation-sdk.js'),
+      fileName: (format) => (format === 'es' ? 'zhupi.esm.js' : 'zhupi.js'),
     },
   },
 })

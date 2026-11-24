@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 // 每个领域使用唯一的方法名，避免同一 *Store 上出现同名不同签名的冲突；

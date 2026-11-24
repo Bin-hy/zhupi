@@ -1,7 +1,7 @@
 *.db
 *.db-wal
 *.db-shm
-/annotation-service
+/zhupi
 bin/
 .env
 internal/sdkassets/dist/*

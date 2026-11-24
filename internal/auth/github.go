@@ -92,7 +92,7 @@ func (g *GitHubClient) fetchUser(ctx context.Context, accessToken string) (Exter
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "annotation-service")
+	req.Header.Set("User-Agent", "zhupi")
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {

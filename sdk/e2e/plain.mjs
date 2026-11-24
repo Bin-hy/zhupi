@@ -27,7 +27,7 @@ try {
   await page.click('.fab')
   await page.waitForSelector('.drawer', { state: 'visible' })
   await page.getByRole('button', { name: '本地调试登录' }).click()
-  await page.waitForFunction(() => document.querySelector('.annotation-sdk-host')?.shadowRoot?.textContent?.includes('sdk-user'), null, { timeout: 30000 })
+  await page.waitForFunction(() => document.querySelector('.zhupi-host')?.shadowRoot?.textContent?.includes('sdk-user'), null, { timeout: 30000 })
   console.log('2) 调试登录成功')
   await page.click('[data-action="close-account"]')
   await page.click('[data-action="close-drawer"]')

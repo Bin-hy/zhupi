@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 func chain(h http.Handler, mws ...func(http.Handler) http.Handler) http.Handler {

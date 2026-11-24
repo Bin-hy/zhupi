@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 const sessionColumns = `id, token_hash, user_id, user_agent, ip, created_at, expires_at, last_seen_at, revoked_at`

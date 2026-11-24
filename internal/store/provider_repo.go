@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 const providerColumns = `id, site_id, name, issuer, client_id, client_secret_cipher, scopes, allowed_email_domains, enabled, created_at, updated_at`

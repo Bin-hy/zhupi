@@ -51,8 +51,8 @@ onMounted(() => {
   <el-container class="layout">
     <el-aside :width="collapsed ? '64px' : '220px'" class="aside">
       <div class="brand" :class="{ collapsed }">
-        <span v-if="!collapsed">Annotation Admin</span>
-        <span v-else>A</span>
+        <span v-if="!collapsed">朱批 · Zhupi</span>
+        <span v-else>朱</span>
       </div>
       <el-menu :collapse="collapsed" :default-active="active" @select="onSelect">
         <el-menu-item index="/">概览</el-menu-item>

@@ -15,13 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	authpkg "github.com/Bin-hy/go-campus/annotation-service/internal/auth"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/config"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/crypto"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/httpapi"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/store"
+	authpkg "github.com/Bin-hy/zhupi/internal/auth"
+	"github.com/Bin-hy/zhupi/internal/config"
+	"github.com/Bin-hy/zhupi/internal/crypto"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/httpapi"
+	"github.com/Bin-hy/zhupi/internal/service"
+	"github.com/Bin-hy/zhupi/internal/store"
 )
 
 func main() {
@@ -100,7 +100,7 @@ func runServe() {
 	}()
 
 	go func() {
-		log.Info("annotation-service 启动", "addr", cfg.Addr, "devLogin", cfg.DevLogin, "github", cfg.GitHubConfigured())
+		log.Info("zhupi 启动", "addr", cfg.Addr, "devLogin", cfg.DevLogin, "github", cfg.GitHubConfigured())
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("服务启动失败", "err", err)
 			os.Exit(1)
@@ -119,7 +119,7 @@ func runServe() {
 func runAdmin(args []string) {
 	log := logger()
 	if len(args) == 0 {
-		fmt.Println("用法: annotation-service admin <migrate|site|promote|users> [...]")
+		fmt.Println("用法: zhupi admin <migrate|site|promote|users> [...]")
 		os.Exit(2)
 	}
 	cfg, err := config.Load()

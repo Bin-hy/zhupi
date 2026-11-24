@@ -12,7 +12,7 @@ const API = (process.env.ANNOTATION_API || 'http://127.0.0.1:18090').replace(/\/
 const SITE_KEY = required('SITE_KEY')
 const PAGE = required('PAGE')
 const ORIGIN = new URL(PAGE).origin
-const TOKEN_KEY = `annotation-sdk:${API}:${SITE_KEY}`
+const TOKEN_KEY = `zhupi:${API}:${SITE_KEY}`
 
 async function devLogin(name) {
   const res = await fetch(`${API}/api/v1/auth/dev/login`, {
@@ -68,13 +68,13 @@ try {
   await page.waitForFunction(
     () =>
       document
-        .querySelector('.annotation-sdk-host')
+        .querySelector('.zhupi-host')
         ?.shadowRoot?.textContent?.includes('e2e-vp-user'),
     null,
     { timeout: 30000 },
   )
   const drawerTop = await page.evaluate(() => {
-    const el = document.querySelector('.annotation-sdk-host')?.shadowRoot?.querySelector('.drawer')
+    const el = document.querySelector('.zhupi-host')?.shadowRoot?.querySelector('.drawer')
     return el ? Math.round(el.getBoundingClientRect().top) : 0
   })
   if (drawerTop < 40) throw new Error(`drawer should start below nav, got ${drawerTop}`)
@@ -118,12 +118,12 @@ try {
   console.log('4) 创建批注后导航计数 +1:', newCount)
 
   const beforeTheme = await page.evaluate(
-    () => document.querySelector('.annotation-sdk-host')?.dataset.theme,
+    () => document.querySelector('.zhupi-host')?.dataset.theme,
   )
   await page.click('.VPSwitchAppearance')
   await page.waitForTimeout(300)
   const afterTheme = await page.evaluate(
-    () => document.querySelector('.annotation-sdk-host')?.dataset.theme,
+    () => document.querySelector('.zhupi-host')?.dataset.theme,
   )
   if (!afterTheme || afterTheme === beforeTheme) {
     throw new Error(`dark sync failed: ${beforeTheme} -> ${afterTheme}`)
@@ -144,7 +144,7 @@ try {
   )
   await page.waitForSelector('.vp-doc', { timeout: 60000 })
   await page.waitForTimeout(800)
-  const hosts = await page.locator('.annotation-sdk-host').count()
+  const hosts = await page.locator('.zhupi-host').count()
   if (hosts !== 1) throw new Error(`expected 1 SDK host after setPage, got ${hosts}`)
   pageKey = decodeURIComponent(new URL(page.url()).pathname)
   total = await pageTotal(pageKey)
@@ -154,13 +154,13 @@ try {
 
   await page.click('.VPNavBarTitle a')
   await page.waitForSelector('.annotation-nav', { state: 'detached', timeout: 60000 })
-  if ((await page.locator('.annotation-sdk-host').count()) !== 0) {
+  if ((await page.locator('.zhupi-host').count()) !== 0) {
     throw new Error('SDK host not removed on home')
   }
   console.log('7) 首页隐藏入口并销毁实例')
   await page.goBack()
   await page.waitForSelector('.annotation-nav', { timeout: 60000 })
-  await page.waitForSelector('.annotation-sdk-host', { state: 'attached', timeout: 60000 })
+  await page.waitForSelector('.zhupi-host', { state: 'attached', timeout: 60000 })
   await page.waitForSelector('.fab', { timeout: 60000 })
   console.log('8) 返回文档页恢复实例')
 
@@ -180,7 +180,7 @@ try {
   await mobile.click('.annotation-nav-btn')
   await mobile.waitForSelector('.drawer', { state: 'visible' })
   const drawerWidth = await mobile.evaluate(() => {
-    const el = document.querySelector('.annotation-sdk-host')?.shadowRoot?.querySelector('.drawer')
+    const el = document.querySelector('.zhupi-host')?.shadowRoot?.querySelector('.drawer')
     return el ? Math.round(el.getBoundingClientRect().width) : 0
   })
   if (mobileNameDisplay !== 'none' || drawerWidth < 380) {
@@ -191,7 +191,7 @@ try {
   // 错误降级
   const errorContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const errorPage = await errorContext.newPage()
-  await errorPage.route('**/sdk/v1/annotation-sdk.js', (route) => route.abort())
+  await errorPage.route('**/sdk/v1/zhupi.js', (route) => route.abort())
   await errorPage.goto(PAGE, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await errorPage.waitForSelector('.annotation-nav', { timeout: 120000 })
   await errorPage.waitForSelector('text=批注不可用', { timeout: 60000 })

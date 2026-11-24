@@ -5,7 +5,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/adminassets"
+	"github.com/Bin-hy/zhupi/internal/adminassets"
 )
 
 func (s *Server) handleAdminRoot(w http.ResponseWriter, r *http.Request) {

@@ -122,7 +122,7 @@ export class Emitter {
       try {
         handler(payload)
       } catch (err) {
-        console.error('[annotation-sdk] event handler failed', event, err)
+        console.error('[zhupi] event handler failed', event, err)
       }
     }
   }

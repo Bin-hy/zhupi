@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/service"
 )
 
 func (s *Server) handleAdminListSites(w http.ResponseWriter, r *http.Request) {

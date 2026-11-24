@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	authpkg "github.com/Bin-hy/go-campus/annotation-service/internal/auth"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/config"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/crypto"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/service"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/store"
+	authpkg "github.com/Bin-hy/zhupi/internal/auth"
+	"github.com/Bin-hy/zhupi/internal/config"
+	"github.com/Bin-hy/zhupi/internal/crypto"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/service"
+	"github.com/Bin-hy/zhupi/internal/store"
 )
 
 type testEnv struct {

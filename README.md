@@ -1,7 +1,11 @@
-# Annotation Service
+# 朱批 · zhupi
 
-多站点、可嵌入的划线批注服务。一个部署实例可以托管多个站点（类似 Artalk 的集中管理），
+**多站点、可嵌入的划线批注服务。** 一个部署实例可以托管多个站点（类似 Artalk 的集中管理），
 任意 Web 前端通过一段脚本接入，即可获得「选中文字 → 划线 → 批注与回复」的能力。
+
+> **名字取自「朱批」**：古人用朱笔在书页、奏折上圈点批注——红笔划过重点，批语留在页边，
+> 与「划线 + 批注」是同一件事。和同门的 **yufu（鱼符）** 一样，用一个有身份的古物指代产品的本质：
+> 鱼符管身份，朱批管批注。
 
 - **多站点隔离**：公开 siteKey + 来源白名单，批注/评论按站点隔离
 - **可嵌入 SDK**：Shadow DOM UI，不污染宿主样式，支持 ESM / `<script>` 两种引入
@@ -27,19 +31,19 @@
 
 ```bash
 # 1) 构建 SDK + 服务
-make build            # 产出 bin/annotation-service（内嵌 SDK）
+make build            # 产出 bin/zhupi（内嵌 SDK）
 
 # 2) 准备环境
 export SECRET_KEY=$(openssl rand -hex 32)
-export DB_PATH=./annotations.db
+export DB_PATH=./zhupi.db
 export PUBLIC_BASE_URL=http://127.0.0.1:8080
 export DEV_LOGIN=1
 
 # 3) 创建站点
-./bin/annotation-service admin site create --name blog --origin http://127.0.0.1:5173
+./bin/zhupi admin site create --name blog --origin http://127.0.0.1:5173
 
 # 4) 启动服务
-./bin/annotation-service serve
+./bin/zhupi serve
 ```
 
 打开 `examples/plain-html/index.html`（用任意静态服务器托管），通过
@@ -48,12 +52,12 @@ export DEV_LOGIN=1
 ## 接入 SDK
 
 ```html
-<script src="https://annot.example.com/sdk/v1/annotation-sdk.js"></script>
+<script src="https://zhupi.dev/sdk/v1/zhupi.js"></script>
 <script>
-  AnnotationSDK.init({
+  ZhupiSDK.init({
     siteKey: 'YOUR_SITE_KEY',
     selectRoot: '.vp-doc',      // 允许划词的范围，默认 document.body
-    // apiBase: 'https://annot.example.com', // 默认从脚本地址推导
+    // apiBase: 'https://zhupi.dev', // 默认从脚本地址推导
     on: {
       ready: () => console.log('annotation ready'),
       created: (annotation) => console.log('created', annotation.id),
@@ -78,7 +82,7 @@ SDK 内置能力：筛选（全部/我的/已解决/待审）、游标分页、�
 ESM：
 
 ```js
-import { init } from '@gocampus/annotation-sdk'
+import { init } from 'zhupi-sdk'
 const instance = init({ siteKey: 'YOUR_SITE_KEY' })
 ```
 
@@ -86,18 +90,18 @@ const instance = init({ siteKey: 'YOUR_SITE_KEY' })
 
 ```bash
 # 站点列表
-./bin/annotation-service admin site list
+./bin/zhupi admin site list
 
 # 轮换 siteKey（旧 key 立即失效）
-./bin/annotation-service admin site rotate-key --site <siteKey>
+./bin/zhupi admin site rotate-key --site <siteKey>
 
 # 指定站点管理员（用户需先登录过一次）
-./bin/annotation-service admin site add-admin --site <siteKey> --user <githubLogin|用户ID>
-./bin/annotation-service admin site remove-admin --site <siteKey> --user <githubLogin|用户ID>
+./bin/zhupi admin site add-admin --site <siteKey> --user <githubLogin|用户ID>
+./bin/zhupi admin site remove-admin --site <siteKey> --user <githubLogin|用户ID>
 
 # 提升超级管理员
-./bin/annotation-service admin users list
-./bin/annotation-service admin promote --user-id 1
+./bin/zhupi admin users list
+./bin/zhupi admin promote --user-id 1
 # 或在环境变量 SUPERADMIN_GITHUB_LOGINS 中配置，登录时自动提升
 ```
 
@@ -118,13 +122,13 @@ ${PUBLIC_BASE_URL}/api/v1/auth/github/callback
 站点管理员或超管通过管理 API 配置，服务端会在保存时做一次 Discovery 校验：
 
 ```bash
-curl -X POST https://annot.example.com/api/v1/admin/sites/1/providers \
+curl -X POST https://zhupi.dev/api/v1/admin/sites/1/providers \
   -H "Authorization: Bearer <site-admin-token>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "公司 SSO",
     "issuer": "https://sso.example.com",
-    "clientId": "annotation-service",
+    "clientId": "zhupi",
     "clientSecret": "***",
     "scopes": ["openid", "email", "profile"],
     "allowedEmailDomains": ["example.com"],
@@ -151,7 +155,7 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 首次使用需要把某个 GitHub 用户提升为超管：
 
 ```bash
-./bin/annotation-service admin promote --github-login <你的 GitHub 登录名>
+./bin/zhupi admin promote --github-login <你的 GitHub 登录名>
 ```
 
 ## API 概览
@@ -186,16 +190,16 @@ Docker（多阶段：Node 构建 SDK → Go embed → Alpine）：
 cp .env.example .env
 # 修改 PUBLIC_BASE_URL / SECRET_KEY / GITHUB_* 等
 docker compose up -d --build
-docker compose logs -f annotation
+docker compose logs -f zhupi
 ```
 
 服务只监听宿主机 `127.0.0.1:8080`，由 Caddy/Nginx 提供 HTTPS：
 
 - [deploy/Caddyfile.example](./deploy/Caddyfile.example)
 - [deploy/nginx.conf.example](./deploy/nginx.conf.example)
-- [deploy/annotation-service.service](./deploy/annotation-service.service)（裸机 systemd）
+- [deploy/zhupi.service](./deploy/zhupi.service)（裸机 systemd）
 
-数据存放在命名卷 `gocampus-annot-data`。
+数据存放在命名卷 `zhupi-data`。
 
 ## 验证
 

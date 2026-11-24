@@ -1,4 +1,4 @@
-module github.com/Bin-hy/go-campus/annotation-service
+module github.com/Bin-hy/zhupi
 
 go 1.26.0
 

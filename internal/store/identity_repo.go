@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 const identityColumns = `id, user_id, provider, site_id, issuer, subject, handle, email, email_verified, avatar_url, created_at, last_login_at`

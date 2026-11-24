@@ -7,7 +7,7 @@ export class Host {
 
   constructor(container: HTMLElement, variables?: Record<string, string>) {
     this.host = document.createElement('div')
-    this.host.className = 'annotation-sdk-host'
+    this.host.className = 'zhupi-host'
     this.host.style.all = 'initial'
     this.root = this.host.attachShadow({ mode: 'open' })
     const style = document.createElement('style')

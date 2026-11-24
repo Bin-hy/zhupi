@@ -10,7 +10,7 @@ const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Conte
 const API = process.env.ANNOTATION_API || 'http://127.0.0.1:18090'
 const SITE_KEY = required('SITE_KEY')
 const PAGE = required('PAGE')
-const TOKEN_KEY = `annotation-sdk:${API}:${SITE_KEY}`
+const TOKEN_KEY = `zhupi:${API}:${SITE_KEY}`
 
 async function devLogin(name) {
   const res = await fetch(`${API}/api/v1/auth/dev/login`, {
@@ -39,7 +39,7 @@ try {
   await page.click('.fab')
   await page.click('[data-action="account"]')
   await page.waitForFunction(
-    () => document.querySelector('.annotation-sdk-host')?.shadowRoot?.textContent?.includes('e2e-extra4'),
+    () => document.querySelector('.zhupi-host')?.shadowRoot?.textContent?.includes('e2e-extra4'),
     null,
     { timeout: 30000 },
   )
@@ -63,7 +63,7 @@ try {
   await page.click('[data-action="revoke-all"]')
   await page.click('.confirm')
   await page.waitForFunction(
-    () => !localStorage.getItem('annotation-sdk:' + 'http://127.0.0.1:18090' + ':' + 'O8sDo-s-GpEZK02vC8tUTYvbdCUB02LZ'),
+    () => !localStorage.getItem('zhupi:' + 'http://127.0.0.1:18090' + ':' + 'O8sDo-s-GpEZK02vC8tUTYvbdCUB02LZ'),
     null,
     { timeout: 30000 },
   )
@@ -79,7 +79,7 @@ try {
   await mobile.waitForSelector('.fab', { timeout: 120000 })
   await mobile.click('.fab')
   const metrics = await mobile.evaluate(() => {
-    const root = document.querySelector('.annotation-sdk-host')?.shadowRoot
+    const root = document.querySelector('.zhupi-host')?.shadowRoot
     const drawer = root?.querySelector('.drawer')
     const tab = root?.querySelector('.tab')
     const fab = root?.querySelector('.fab')
@@ -96,7 +96,7 @@ try {
   // 键盘焦点陷阱
   for (let i = 0; i < 6; i++) await mobile.keyboard.press('Tab')
   const trapped = await mobile.evaluate(() => {
-    const host = document.querySelector('.annotation-sdk-host')
+    const host = document.querySelector('.zhupi-host')
     const root = host?.shadowRoot
     const active = root?.activeElement
     const drawer = root?.querySelector('.drawer')
@@ -107,7 +107,7 @@ try {
 
   await mobile.keyboard.press('Escape')
   const closed = await mobile.evaluate(() => {
-    const root = document.querySelector('.annotation-sdk-host')?.shadowRoot
+    const root = document.querySelector('.zhupi-host')?.shadowRoot
     return root?.querySelector('.drawer')?.hasAttribute('hidden')
   })
   console.log('6) Escape 关闭抽屉:', closed)

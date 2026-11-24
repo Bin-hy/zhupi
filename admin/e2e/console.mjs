@@ -131,7 +131,7 @@ try {
 
   const loginPage = await browser.newPage()
   await loginPage.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded', timeout: 120000 })
-  await loginPage.waitForSelector('text=Annotation Admin', { timeout: 30000 })
+  await loginPage.waitForSelector('text=朱批 · Zhupi', { timeout: 30000 })
   console.log('8) 登录页渲染正常')
 
   console.log('ADMIN E2E PASS')

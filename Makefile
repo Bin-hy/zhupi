@@ -15,7 +15,7 @@ admin:
 	touch internal/adminassets/dist/.gitkeep
 
 server:
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/annotation-service ./cmd/annotation-service
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/zhupi ./cmd/zhupi
 
 build: sdk admin server
 

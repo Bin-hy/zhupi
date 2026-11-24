@@ -25,7 +25,7 @@ COPY . .
 COPY --from=sdk /src/sdk/dist ./internal/sdkassets/dist
 COPY --from=admin /src/admin/dist ./internal/adminassets/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
-    -o /out/annotation-service ./cmd/annotation-service
+    -o /out/zhupi ./cmd/zhupi
 
 # 3) 运行时
 FROM alpine:3.22
@@ -37,10 +37,10 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 USER 10001:10001
 WORKDIR /app
-COPY --from=build /out/annotation-service /app/annotation-service
+COPY --from=build /out/zhupi /app/zhupi
 
 ENV ADDR=:8080 \
-    DB_PATH=/data/annotations.db
+    DB_PATH=/data/zhupi.db
 
 EXPOSE 8080
 VOLUME ["/data"]
@@ -48,5 +48,5 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
 
-ENTRYPOINT ["/app/annotation-service"]
+ENTRYPOINT ["/app/zhupi"]
 CMD ["serve"]

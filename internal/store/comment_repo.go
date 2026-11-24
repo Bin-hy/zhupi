@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 const commentSelect = `

@@ -65,7 +65,7 @@ export class AnnotationInstance {
   private destroyed = false
 
   constructor(options: InitOptions) {
-    if (!options || !options.siteKey) throw new Error('annotation-sdk: siteKey is required')
+    if (!options || !options.siteKey) throw new Error('zhupi: siteKey is required')
     this.options = options
     this.pageKey = normalizePageKey(options.pageKey || location.pathname)
     this.pageTitle = options.pageTitle || document.title
@@ -892,7 +892,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 function injectMarkStyles(accent: string): void {
-  const id = 'annotation-sdk-mark-styles'
+  const id = 'zhupi-mark-styles'
   let style = document.getElementById(id) as HTMLStyleElement | null
   if (!style) {
     style = document.createElement('style')

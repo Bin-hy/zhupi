@@ -1,22 +1,22 @@
-# 宿主机 Nginx 配置示例（放在 /etc/nginx/conf.d/annotation.conf）
+# 宿主机 Nginx 配置示例（放在 /etc/nginx/conf.d/zhupi.conf）
 #
 # 前提：已有证书。可用 certbot 申请：
-#   certbot certonly --nginx -d annot.example.com
+#   certbot certonly --nginx -d zhupi.dev
 # 然后执行 nginx -t && systemctl reload nginx
 
 server {
     listen 80;
-    server_name annot.example.com;
+    server_name zhupi.dev;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
     http2 on;
-    server_name annot.example.com;
+    server_name zhupi.dev;
 
-    ssl_certificate     /etc/letsencrypt/live/annot.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/annot.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/zhupi.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zhupi.dev/privkey.pem;
 
     client_max_body_size 128k;
 

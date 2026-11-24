@@ -3,16 +3,16 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
-	"github.com/Bin-hy/go-campus/annotation-service/internal/sdkassets"
+	"github.com/Bin-hy/zhupi/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/sdkassets"
 )
 
 func (s *Server) handleSDKJS(w http.ResponseWriter, r *http.Request) {
-	s.serveSDKFile(w, "annotation-sdk.js")
+	s.serveSDKFile(w, "zhupi.js")
 }
 
 func (s *Server) handleSDKESM(w http.ResponseWriter, r *http.Request) {
-	s.serveSDKFile(w, "annotation-sdk.esm.js")
+	s.serveSDKFile(w, "zhupi.esm.js")
 }
 
 func (s *Server) serveSDKFile(w http.ResponseWriter, name string) {

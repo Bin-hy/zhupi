@@ -33,7 +33,7 @@ type Config struct {
 func Load() (*Config, error) {
 	c := &Config{
 		Addr:                   getenv("ADDR", ":8080"),
-		DBPath:                 getenv("DB_PATH", "annotations.db"),
+		DBPath:                 getenv("DB_PATH", "zhupi.db"),
 		PublicBaseURL:          strings.TrimRight(getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080"), "/"),
 		GitHubClientID:         os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubSecret:           os.Getenv("GITHUB_CLIENT_SECRET"),

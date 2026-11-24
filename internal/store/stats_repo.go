@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 func inClause(column string, n int) string {

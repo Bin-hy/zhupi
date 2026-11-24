@@ -1,19 +1,19 @@
 services:
-  annotation:
+  zhupi:
     build: .
-    image: gocampus/annotation-service:latest
+    image: binhy/zhupi:latest
     restart: unless-stopped
     env_file: .env
     environment:
       ADDR: ":8080"
-      DB_PATH: /data/annotations.db
+      DB_PATH: /data/zhupi.db
       # 前面有反向代理（Caddy/Nginx），用于识别真实客户端 IP
       TRUST_PROXY: "1"
     # 只监听宿主机回环地址，由 Caddy/Nginx 对外提供 HTTPS
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - annot-data:/data
+      - zhupi-data:/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -22,5 +22,5 @@ services:
       start_period: 10s
 
 volumes:
-  annot-data:
-    name: gocampus-annot-data
+  zhupi-data:
+    name: zhupi-data

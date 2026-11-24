@@ -1,6 +1,6 @@
 import type { Anchor, Annotation } from './events'
 
-const EXCLUDE_SELECTOR = 'pre, svg, .mermaid, .katex, .annotation-sdk-host, script, style'
+const EXCLUDE_SELECTOR = 'pre, svg, .mermaid, .katex, .zhupi-host, script, style'
 
 function closestExcluded(node: Node | null): Element | null {
   if (!node) return null
@@ -103,7 +103,7 @@ export async function highlightAnnotations(
     try {
       range = dq.toRange(scope, selector)
     } catch (err) {
-      console.warn('[annotation-sdk] anchor match failed', annotation.id, err)
+      console.warn('[zhupi] anchor match failed', annotation.id, err)
     }
     if (!range) {
       onOrphan(annotation.id)
@@ -117,7 +117,7 @@ export async function highlightAnnotations(
         }),
       )
     } catch (err) {
-      console.warn('[annotation-sdk] highlight failed', annotation.id, err)
+      console.warn('[zhupi] highlight failed', annotation.id, err)
       onOrphan(annotation.id)
     }
   }

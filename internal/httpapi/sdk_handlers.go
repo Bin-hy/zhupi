@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/sdkassets"
+	"github.com/Bin-hy/zhupi/internal/sdkassets"
 )
 
 func (s *Server) handleSDKFile(w http.ResponseWriter, r *http.Request) {

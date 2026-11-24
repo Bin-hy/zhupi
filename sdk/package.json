@@ -1,8 +1,8 @@
 {
-  "name": "@gocampus/annotation-sdk",
+  "name": "zhupi-sdk",
   "version": "0.1.0",
   "type": "module",
-  "main": "dist/annotation-sdk.esm.js",
+  "main": "dist/zhupi.esm.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"

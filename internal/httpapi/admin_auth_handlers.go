@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/Bin-hy/go-campus/annotation-service/internal/domain"
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 func (s *Server) handleAdminProviders(w http.ResponseWriter, r *http.Request) {

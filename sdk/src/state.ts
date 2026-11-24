@@ -12,6 +12,7 @@ export type SDKState = {
   sessionsLoading: boolean
   sessionsLoaded: boolean
   annotations: Annotation[]
+  total: number
   orphans: Set<number>
   activeId: number | null
   filter: Filter
@@ -36,6 +37,7 @@ export function initialState(): SDKState {
     sessionsLoading: false,
     sessionsLoaded: false,
     annotations: [],
+    total: 0,
     orphans: new Set(),
     activeId: null,
     filter: 'all',

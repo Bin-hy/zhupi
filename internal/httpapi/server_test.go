@@ -596,3 +596,77 @@ func TestAdminConsoleAPIs(t *testing.T) {
 		t.Fatalf("/admin/ did not return app html: %s", adminBody[:min(200, len(adminBody))])
 	}
 }
+
+func (e *testEnv) listPage(t *testing.T, token, siteKey, origin, filter string, cursor, limit int64) ([]domain.Annotation, int64, int) {
+	t.Helper()
+	path := "/api/v1/annotations?page=%2Fdoc"
+	if filter != "" {
+		path += "&filter=" + filter
+	}
+	if cursor > 0 {
+		path += "&cursor=" + itoa(cursor)
+	}
+	if limit > 0 {
+		path += "&limit=" + itoa(limit)
+	}
+	resp, body := e.do(t, http.MethodGet, path, token, siteKey, origin, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list page: %d %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Annotations []domain.Annotation `json:"annotations"`
+		NextCursor  int64               `json:"nextCursor"`
+		Total       int                 `json:"total"`
+	}
+	_ = json.Unmarshal(body, &out)
+	return out.Annotations, out.NextCursor, out.Total
+}
+
+func TestPageTotal(t *testing.T) {
+	e := newTestEnv(t)
+	site := e.site(t, "a", "http://a.test", domain.ModerationPost)
+	alice := e.login(t, "alice")
+	bob := e.login(t, "bob")
+
+	a1 := e.createAnnotation(t, alice, site, "http://a.test", "alice open", "alpha")
+	a2 := e.createAnnotation(t, alice, site, "http://a.test", "alice resolved", "beta")
+	e.createAnnotation(t, bob, site, "http://a.test", "bob open", "gamma")
+	resp, _ := e.do(t, http.MethodPatch, "/api/v1/annotations/"+itoa(a2.ID), alice, site.Key, "http://a.test", map[string]any{"status": "resolved"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resolve = %d", resp.StatusCode)
+	}
+
+	if _, _, total := e.listPage(t, "", site.Key, "http://a.test", "all", 0, 0); total != 3 {
+		t.Fatalf("anon all total = %d", total)
+	}
+	if _, _, total := e.listPage(t, alice, site.Key, "http://a.test", "mine", 0, 0); total != 3 {
+		t.Fatalf("alice mine total = %d", total)
+	}
+	if _, _, total := e.listPage(t, "", site.Key, "http://a.test", "resolved", 0, 0); total != 3 {
+		t.Fatalf("resolved total = %d", total)
+	}
+	if _, next, total := e.listPage(t, "", site.Key, "http://a.test", "all", 0, 1); total != 3 {
+		t.Fatalf("paginated total = %d", total)
+	} else if next == 0 {
+		t.Fatal("expected next cursor")
+	}
+
+	// 先审后发站点：匿名 total=0，作者 total=1
+	pre := e.site(t, "pre", "http://pre.test", domain.ModerationPre)
+	e.createAnnotation(t, alice, pre, "http://pre.test", "pending", "p")
+	if _, _, total := e.listPage(t, "", pre.Key, "http://pre.test", "all", 0, 0); total != 0 {
+		t.Fatalf("pre anon total = %d", total)
+	}
+	if _, _, total := e.listPage(t, alice, pre.Key, "http://pre.test", "pending", 0, 0); total != 1 {
+		t.Fatalf("pre author total = %d", total)
+	}
+
+	// 删除后 total 减少
+	resp, _ = e.do(t, http.MethodDelete, "/api/v1/annotations/"+itoa(a1.ID), alice, site.Key, "http://a.test", nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete = %d", resp.StatusCode)
+	}
+	if _, _, total := e.listPage(t, "", site.Key, "http://a.test", "all", 0, 0); total != 2 {
+		t.Fatalf("after delete total = %d", total)
+	}
+}

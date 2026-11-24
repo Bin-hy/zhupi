@@ -26,6 +26,7 @@ describe('state', () => {
     expect(s.filter).toBe('all')
     expect(s.theme).toBe('auto')
     expect(s.annotations).toEqual([])
+    expect(s.total).toBe(0)
   })
 
   it('append dedupes by id', () => {

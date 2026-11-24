@@ -97,6 +97,7 @@ export type EventMap = {
   deleted: { id: number }
   error: Error
   pagechange: { pageKey: string }
+  statechange: { user: User | null; annotationCount: number; loggedIn: boolean }
 }
 
 type Handler<T> = (payload: T) => void

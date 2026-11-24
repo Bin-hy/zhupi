@@ -336,3 +336,21 @@ func (s *Store) loadComments(ctx context.Context, siteID int64, annotationIDs []
 	}
 	return result, rows.Err()
 }
+
+func (s *Store) CountPageAnnotations(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (int, error) {
+	if pageKey == "" {
+		return 0, nil
+	}
+	include := 0
+	if includeUnapproved {
+		include = 1
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM annotations a
+		WHERE a.site_id = ? AND a.page_key = ? AND a.visibility <> 'deleted'
+			AND ((a.moderation = 'approved' AND a.visibility = 'visible') OR a.created_by = ? OR ? = 1)`,
+		siteID, pageKey, viewerID, include).Scan(&n)
+	return n, err
+}

@@ -5,7 +5,7 @@ export class Host {
   readonly host: HTMLElement
   readonly root: ShadowRoot
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, variables?: Record<string, string>) {
     this.host = document.createElement('div')
     this.host.className = 'annotation-sdk-host'
     this.host.style.all = 'initial'
@@ -14,6 +14,14 @@ export class Host {
     style.textContent = styles
     this.root.appendChild(style)
     container.appendChild(this.host)
+    this.setVariables(variables)
+  }
+
+  setVariables(variables?: Record<string, string>): void {
+    if (!variables) return
+    for (const [key, value] of Object.entries(variables)) {
+      this.host.style.setProperty(key, value)
+    }
   }
 
   setAccent(color: string): void {

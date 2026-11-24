@@ -33,6 +33,7 @@ export type InitOptions = {
   locale?: 'zh-CN' | 'en'
   theme?: ThemeMode
   devLogin?: boolean
+  cssVariables?: Record<string, string>
   on?: Partial<{ [K in keyof EventMap]: (payload: EventMap[K]) => void }>
 }
 
@@ -43,7 +44,8 @@ export class AnnotationInstance {
   private readonly client: AnnotationClient
   private readonly emitter = new Emitter()
   private readonly ui: AnnotationUI
-  private readonly selectRoot: HTMLElement
+  private selectRoot: HTMLElement
+  private readonly selectRootOption: HTMLElement | string | undefined
   private readonly apiBase: string
 
   private state: SDKState
@@ -69,7 +71,8 @@ export class AnnotationInstance {
     this.pageTitle = options.pageTitle || document.title
     this.apiBase = (options.apiBase || deriveApiBase()).replace(/\/+$/, '')
     this.client = new AnnotationClient(this.apiBase, options.siteKey)
-    this.selectRoot = resolveElement(options.selectRoot, document.body) as HTMLElement
+    this.selectRootOption = options.selectRoot
+    this.selectRoot = this.resolveSelectRoot()
     const container = resolveElement(options.container, document.body) as HTMLElement
 
     const storedTheme = loadThemePreference(this.apiBase, options.siteKey)
@@ -109,7 +112,7 @@ export class AnnotationInstance {
         onThemeChange: (mode) => this.changeTheme(mode),
         onLocaleChange: (locale) => this.changeLocale(locale),
       },
-      { locale: this.state.locale, theme, devLogin: !!options.devLogin },
+      { locale: this.state.locale, theme, devLogin: !!options.devLogin, cssVariables: options.cssVariables },
     )
     this.ui.setTheme(theme, resolveTheme(theme))
     this.stopThemeWatch = watchSystemTheme(() => {
@@ -164,6 +167,7 @@ export class AnnotationInstance {
     this.ui.closeComposer()
     this.ui.hideToolbar()
     this.cancelRelocate()
+    this.selectRoot = this.resolveSelectRoot()
     this.emitter.emit('pagechange', { pageKey: this.pageKey })
     await this.loadList(true)
   }
@@ -197,13 +201,29 @@ export class AnnotationInstance {
       accountOpen: false,
       siteBanned: false,
     })
-    this.ui.setState(this.state)
+    this.commitState()
     this.emitter.emit('logout', undefined)
     await this.loadList(true)
   }
 
   getCurrentUser(): User | null {
     return this.state.user
+  }
+
+  getAnnotationCount(): number {
+    return this.state.total
+  }
+
+  setTheme(mode: ThemeMode): void {
+    this.changeTheme(mode)
+  }
+
+  openDrawer(): void {
+    this.ui.openDrawer()
+  }
+
+  openAccount(): void {
+    this.ui.openAccount()
   }
 
   on<K extends keyof EventMap>(event: K, handler: (payload: EventMap[K]) => void): () => void {
@@ -230,11 +250,13 @@ export class AnnotationInstance {
   // ---- data ----
 
   private async loadList(reset: boolean, limit = PAGE_SIZE): Promise<void> {
+    this.selectRoot = this.resolveSelectRoot()
     const seq = ++this.loadSeq
     if (reset) {
       this.cleanup()
       this.state = mergeState(this.state, {
         annotations: [],
+        total: 0,
         orphans: new Set(),
         activeId: null,
         nextCursor: 0,
@@ -246,7 +268,7 @@ export class AnnotationInstance {
       if (!this.state.nextCursor || this.state.loadingMore) return
       this.state = mergeState(this.state, { loadingMore: true })
     }
-    this.ui.setState(this.state)
+    this.commitState()
 
     try {
       const result = await this.client.listAnnotations(
@@ -261,19 +283,20 @@ export class AnnotationInstance {
         : appendAnnotations(this.state.annotations, result.annotations)
       this.state = mergeState(this.state, {
         annotations,
+        total: result.total,
         nextCursor: result.nextCursor,
         loading: false,
         loadingMore: false,
         error: '',
       })
       await this.rehighlight()
-      this.ui.setState(this.state)
+      this.commitState()
       this.applyPendingDeepLink()
     } catch (err) {
       if (seq !== this.loadSeq) return
       const message = this.errorMessage(err)
       this.state = mergeState(this.state, { loading: false, loadingMore: false, error: message })
-      this.ui.setState(this.state)
+      this.commitState()
       this.handleError(err, false)
     }
   }
@@ -298,7 +321,7 @@ export class AnnotationInstance {
       return
     }
     this.state = mergeState(this.state, { filter })
-    this.ui.setState(this.state)
+    this.commitState()
     await this.loadList(true)
   }
 
@@ -335,14 +358,14 @@ export class AnnotationInstance {
     } catch {
       this.state = mergeState(this.state, { identities: [] })
     }
-    this.ui.setState(this.state)
+    this.commitState()
   }
 
   private async refreshSessions(): Promise<void> {
     if (!this.state.user) return
     const seq = ++this.sessionsSeq
     this.state = mergeState(this.state, { sessionsLoading: true })
-    this.ui.setState(this.state)
+    this.commitState()
     try {
       const result = await this.client.sessions()
       if (seq !== this.sessionsSeq) return
@@ -358,7 +381,7 @@ export class AnnotationInstance {
       this.state = mergeState(this.state, { sessionsLoading: false, sessionsLoaded: true })
       this.handleError(err)
     }
-    this.ui.setState(this.state)
+    this.commitState()
   }
 
   // ---- selection ----
@@ -492,7 +515,7 @@ export class AnnotationInstance {
       const status = annotation.status === 'resolved' ? 'open' : 'resolved'
       const updated = await this.client.updateAnnotation(annotation.id, { status })
       this.state = mergeState(this.state, { annotations: upsertAnnotation(this.state.annotations, updated) })
-      this.ui.setState(this.state)
+      this.commitState()
       this.ui.toast(msg.resolveSuccess)
       this.emitter.emit('updated', updated)
     } catch (err) {
@@ -517,7 +540,7 @@ export class AnnotationInstance {
         activeId: null,
       })
       await this.rehighlight()
-      this.ui.setState(this.state)
+      this.commitState()
       this.ui.toast(msg.deleteSuccess)
       this.emitter.emit('deleted', { id: annotation.id })
     } catch (err) {
@@ -546,7 +569,7 @@ export class AnnotationInstance {
 
   private focus(id: number): void {
     this.state = mergeState(this.state, { activeId: id, drawerOpen: true })
-    this.ui.setState(this.state)
+    this.commitState()
     this.ui.focusCard(id)
     const mark = this.selectRoot.querySelector<HTMLElement>(`mark.annot-mark[data-annotation-id="${id}"]`)
     if (!mark) return
@@ -619,12 +642,12 @@ export class AnnotationInstance {
       drawerOpen: open,
       accountOpen: open ? this.state.accountOpen || !this.state.user : false,
     })
-    this.ui.setState(this.state)
+    this.commitState()
   }
 
   private async toggleAccount(open: boolean): Promise<void> {
     this.state = mergeState(this.state, { drawerOpen: true, accountOpen: open })
-    this.ui.setState(this.state)
+    this.commitState()
     if (open && this.state.user && !this.state.sessionsLoaded) await this.refreshSessions()
   }
 
@@ -676,7 +699,7 @@ export class AnnotationInstance {
           sessionsLoaded: false,
           accountOpen: false,
         })
-        this.ui.setState(this.state)
+        this.commitState()
         this.emitter.emit('logout', undefined)
         await this.loadList(true)
       } else {
@@ -709,7 +732,7 @@ export class AnnotationInstance {
         sessionsLoaded: false,
         accountOpen: false,
       })
-      this.ui.setState(this.state)
+      this.commitState()
       this.emitter.emit('logout', undefined)
       await this.loadList(true)
       this.ui.toast(msg.sessionRevoked)
@@ -736,13 +759,13 @@ export class AnnotationInstance {
     this.state = mergeState(this.state, { theme: mode })
     saveThemePreference(this.apiBase, this.options.siteKey, mode)
     this.ui.setTheme(mode, resolveTheme(mode))
-    this.ui.setState(this.state)
+    this.commitState()
   }
 
   private changeLocale(locale: 'zh-CN' | 'en'): void {
     this.state = mergeState(this.state, { locale })
     this.ui.setLocale(locale)
-    this.ui.setState(this.state)
+    this.commitState()
   }
 
   // ---- misc ----
@@ -755,6 +778,26 @@ export class AnnotationInstance {
       this.toggleDrawer(true)
       this.focus(id)
     }
+  }
+
+  private commitState(): void {
+    this.ui.setState(this.state)
+    this.emitter.emit('statechange', {
+      user: this.state.user,
+      annotationCount: this.state.total,
+      loggedIn: !!this.state.user,
+    })
+  }
+
+  private resolveSelectRoot(): HTMLElement {
+    const option = this.selectRootOption
+    if (typeof option === 'string') {
+      return document.querySelector<HTMLElement>(option) || document.body
+    }
+    if (option instanceof HTMLElement) {
+      return option.isConnected ? option : document.body
+    }
+    return document.body
   }
 
   private cleanup(): void {
@@ -790,7 +833,7 @@ export class AnnotationInstance {
       }
     }
     if (toast) this.ui.toast(message, 'error')
-    this.ui.setState(this.state)
+    this.commitState()
     this.emitter.emit('error', err instanceof Error ? err : new Error(message))
   }
 }

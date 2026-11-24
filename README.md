@@ -68,10 +68,12 @@ SPA 路由切换：
 await instance.setPage({ pageKey: location.pathname, pageTitle: document.title })
 ```
 
-其他 API：`refresh()`、`login(providerId?)`、`logout()`、`getCurrentUser()`、`on()`、`destroy()`。
+其他 API：`refresh()`、`login(providerId?)`、`logout()`、`getCurrentUser()`、`getAnnotationCount()`、
+`setTheme()`、`openDrawer()`、`openAccount()`、`on()`、`destroy()`。
 
 SDK 内置能力：筛选（全部/我的/已解决/待审）、游标分页、账号中心（身份绑定、登录设备、
 退出所有设备）、亮/暗/自动主题、中英文、`#annot-<id>` 深链接、orphan 手动重定位。
+`statechange` 事件可把登录态与页面批注总数同步给宿主导航；`setPage` 支持 SPA 路由切换。
 
 ESM：
 

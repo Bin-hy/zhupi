@@ -43,6 +43,7 @@ export type UIOptions = {
   locale: 'zh-CN' | 'en'
   theme: ThemeMode
   devLogin: boolean
+  cssVariables?: Record<string, string>
 }
 
 export class AnnotationUI {
@@ -69,7 +70,7 @@ export class AnnotationUI {
     this.handlers = handlers
     this.options = options
     this.msg = messages(options.locale)
-    this.host = new Host(container)
+    this.host = new Host(container, options.cssVariables)
 
     this.fab = document.createElement('button')
     this.fab.className = 'fab'

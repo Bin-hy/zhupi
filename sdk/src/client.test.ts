@@ -57,14 +57,15 @@ describe('AnnotationClient', () => {
 describe('AnnotationClient extensions', () => {
   it('builds filtered pagination query', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ annotations: [], nextCursor: 0 }), {
+      new Response(JSON.stringify({ annotations: [], nextCursor: 0, total: 5 }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const client = new AnnotationClient('http://api.test', 'site-key')
-    await client.listAnnotations('/a b', 'resolved', 10, 20)
+    const result = await client.listAnnotations('/a b', 'resolved', 10, 20)
+    expect(result.total).toBe(5)
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('page=%2Fa%20b')
     expect(url).toContain('filter=resolved')

@@ -40,6 +40,7 @@ type UpdateAnnotationInput struct {
 type PageResult struct {
 	Annotations []domain.Annotation `json:"annotations"`
 	NextCursor  int64               `json:"nextCursor"`
+	Total       int                 `json:"total"`
 }
 
 func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, site domain.Site, in ListInput) (PageResult, error) {
@@ -70,7 +71,11 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 	if err != nil {
 		return PageResult{}, err
 	}
-	return PageResult{Annotations: list, NextCursor: next}, nil
+	total, err := s.annotations.CountPageAnnotations(ctx, site.ID, pageKey, p.User.ID, include)
+	if err != nil {
+		return PageResult{}, err
+	}
+	return PageResult{Annotations: list, NextCursor: next, Total: total}, nil
 }
 
 func (s *AnnotationService) Create(ctx context.Context, p domain.Principal, site domain.Site, in CreateAnnotationInput) (domain.Annotation, error) {

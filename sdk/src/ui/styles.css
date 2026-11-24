@@ -73,8 +73,8 @@ textarea:focus-visible,
 
 .fab {
   position: fixed;
-  right: 20px;
-  bottom: 24px;
+  right: var(--annotation-fab-right, 20px);
+  bottom: var(--annotation-fab-bottom, 24px);
   z-index: 2147483000;
   display: inline-flex;
   align-items: center;
@@ -198,13 +198,13 @@ textarea:focus-visible,
 
 .drawer {
   position: fixed;
-  top: 0;
+  top: var(--annotation-drawer-top, 0);
   right: 0;
   z-index: 2147483002;
   display: flex;
   flex-direction: column;
   width: min(400px, 100vw);
-  height: 100vh;
+  height: calc(100vh - var(--annotation-drawer-top, 0px));
   padding: 14px 16px 24px;
   overflow-y: auto;
   border-left: 1px solid var(--annot-border);
@@ -624,8 +624,8 @@ textarea:focus-visible,
   }
 
   .fab {
-    right: 16px;
-    bottom: max(16px, env(safe-area-inset-bottom));
+    right: var(--annotation-fab-right, 16px);
+    bottom: var(--annotation-fab-bottom, max(16px, env(safe-area-inset-bottom)));
   }
 
   .composer {

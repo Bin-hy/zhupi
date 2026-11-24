@@ -104,7 +104,7 @@ export class AnnotationClient {
     filter: Filter = 'all',
     cursor = 0,
     limit = 50,
-  ): Promise<{ annotations: Annotation[]; nextCursor: number }> {
+  ): Promise<{ annotations: Annotation[]; nextCursor: number; total: number }> {
     return this.request(
       `/api/v1/annotations?page=${encodeURIComponent(pageKey)}&filter=${filter}&cursor=${cursor}&limit=${limit}`,
     )

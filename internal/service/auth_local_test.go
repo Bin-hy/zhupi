@@ -84,6 +84,33 @@ func TestBootstrapLocalAdminAndLogin(t *testing.T) {
 	if p.LocalUsername != "admin" || !p.MustChangePassword || !p.IsSuperadmin {
 		t.Fatalf("unexpected principal: %+v", p)
 	}
+
+	if err := st.UpdateUserStatus(ctx, user.ID, domain.UserBanned); err != nil {
+		t.Fatalf("ban user: %v", err)
+	}
+	if _, err := svc.LocalLogin(ctx, "admin", "admin", ClientMeta{}); err == nil {
+		t.Fatal("banned user should not login")
+	} else if appErr, ok := domain.AsAppError(err); !ok || appErr.Status != 403 {
+		t.Fatalf("banned login error = %v", err)
+	}
+}
+
+func TestBootstrapCustomUsername(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _ := newLocalAuthEnv(t, "root", "root-password-1")
+	boot, err := svc.BootstrapLocalAdmin(ctx)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if !boot.Created || boot.MustChangePassword {
+		t.Fatalf("unexpected bootstrap: %+v", boot)
+	}
+	if _, err := svc.LocalLogin(ctx, "root", "root-password-1", ClientMeta{}); err != nil {
+		t.Fatalf("custom username login: %v", err)
+	}
+	if _, err := svc.LocalLogin(ctx, "admin", "admin", ClientMeta{}); err == nil {
+		t.Fatal("default username should not exist")
+	}
 }
 
 func TestChangePasswordRevokesOtherSessions(t *testing.T) {
@@ -178,6 +205,9 @@ func TestBootstrapDoesNotOverwriteUnlessReset(t *testing.T) {
 	}
 	if !cred.MustChangePassword {
 		t.Fatal("reset to default password should require change")
+	}
+	if _, _, err := svc.AuthenticateSession(ctx, login.Token); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("reset should revoke all sessions, got %v", err)
 	}
 }
 

@@ -100,8 +100,7 @@ try {
   const row = page.locator('.el-table__row', { hasText: pendingContent })
   await row.waitFor({ timeout: 30000 })
   await row.getByRole('button', { name: '通过' }).click()
-  await page.locator('.el-message-box__btns .el-button--primary').click()
-  await page.waitForSelector(`text=${pendingContent}`, { state: 'detached', timeout: 30000 }).catch(() => {})
+  await page.waitForSelector(`text=${pendingContent}`, { state: 'detached', timeout: 30000 })
   console.log('4) 审核通过完成')
 
   await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded', timeout: 120000 })

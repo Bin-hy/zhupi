@@ -19,13 +19,22 @@ const site = computed<Site | undefined>(() => auth.sites.find((item) => item.id 
 const superadmin = computed(() => isSuperadmin())
 const dialog = ref(false)
 const activeTab = ref('')
+const apiBase = computed(() => window.location.origin)
+const snippet = computed(() => {
+  const key = site.value?.key || 'YOUR_SITE_KEY'
+  return `<script src="${apiBase.value}/sdk/v1/zhupi.js"><\/script>\n<script>\n  window.ZhupiSDK.init({\n    siteKey: '${key}',\n    apiBase: '${apiBase.value}',\n  })\n<\/script>`
+})
 
 const tabs = computed(() => {
   const list: Array<{ name: string; label: string }> = []
   if (superadmin.value) {
     list.push({ name: 'settings', label: '设置' }, { name: 'admins', label: '管理员' })
   }
-  list.push({ name: 'providers', label: 'OIDC 提供商' }, { name: 'bans', label: '封禁' })
+  list.push(
+    { name: 'install', label: '接入' },
+    { name: 'providers', label: 'OIDC 提供商' },
+    { name: 'bans', label: '封禁' },
+  )
   return list
 })
 
@@ -118,6 +127,50 @@ function goModeration(): void {
           <SiteAdminsTab :site-id="siteId" />
         </el-tab-pane>
 
+        <el-tab-pane name="install" label="接入">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="siteKey">
+              <span class="mono break">{{ site.key }}</span>
+              <el-button link type="primary" @click="copy(site.key)">复制</el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="API 地址">
+              <span class="mono break">{{ apiBase }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="审核模式">
+              <StatusTag :status="site.moderationMode" />
+            </el-descriptions-item>
+            <el-descriptions-item label="允许来源">
+              <span class="break">{{ site.origins.join(', ') || '-' }}</span>
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <h3 class="install-title">页面接入代码</h3>
+          <p class="muted">
+            把下面的代码放到文档站模板中（VitePress 可放在 <code>theme/index.ts</code> 的
+            <code>setup()</code> 里动态加载）。SPA 切换页面后调用 <code>setPage()</code>。
+          </p>
+          <pre class="snippet"><code>{{ snippet }}</code></pre>
+          <div class="actions" style="margin-top: 12px">
+            <el-button type="primary" @click="copy(snippet)">复制接入代码</el-button>
+            <el-button @click="goModeration">去审核</el-button>
+          </div>
+
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-top: 16px"
+            title="上线前检查"
+          >
+            <ul class="checklist">
+              <li>把正式域名和所有预览域名加入「允许来源」，否则 SDK 会收到 origin_not_allowed。</li>
+              <li>VITE_* 等前端环境变量在构建期注入，修改后必须重新部署。</li>
+              <li>先发后审模式下内容立即可见；先审后发模式下作者本人仍能看到自己的待审内容。</li>
+              <li>轮换 siteKey 会让旧 key 立即失效，请同步更新部署环境变量。</li>
+            </ul>
+          </el-alert>
+        </el-tab-pane>
+
         <el-tab-pane name="providers" label="OIDC 提供商">
           <SiteProvidersTab :site-id="siteId" />
         </el-tab-pane>
@@ -131,3 +184,27 @@ function goModeration(): void {
     </template>
   </div>
 </template>
+
+<style scoped>
+.install-title {
+  margin: 20px 0 6px;
+  font-size: 15px;
+}
+.snippet {
+  margin: 10px 0 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre;
+}
+.checklist {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.8;
+}
+</style>

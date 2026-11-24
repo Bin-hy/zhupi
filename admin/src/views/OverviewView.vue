@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import type { Overview, OverviewPending } from '../api/types'
@@ -13,6 +13,10 @@ const overview = ref<Overview | null>(null)
 const loading = ref(true)
 const error = ref('')
 
+const pendingTotal = computed(
+  () => (overview.value?.counts.pendingAnnotations || 0) + (overview.value?.counts.pendingComments || 0),
+)
+
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -25,8 +29,16 @@ async function load(): Promise<void> {
   }
 }
 
-function goModerate(item: any): void {
-  void router.push({ path: '/moderation', query: { site: String(item.siteId), status: 'pending' } })
+function goModerate(raw: Record<PropertyKey, any>): void {
+  const item = raw as OverviewPending
+  void router.push({
+    path: '/moderation',
+    query: { site: String(item.siteId), status: 'pending', type: item.kind },
+  })
+}
+
+function goPending(type?: 'annotation' | 'comment'): void {
+  void router.push({ path: '/moderation', query: { status: 'pending', ...(type ? { type } : {}) } })
 }
 
 onMounted(load)
@@ -45,21 +57,26 @@ onMounted(load)
     <ErrorState v-if="error" :message="error" @retry="load" />
     <template v-else>
       <div v-loading="loading">
+        <div v-if="pendingTotal > 0" class="pending-banner">
+          <div>
+            <strong>{{ pendingTotal }}</strong>
+            <span> 条内容等待审核</span>
+            <span class="muted">批注 {{ overview?.counts.pendingAnnotations || 0 }} · 评论 {{ overview?.counts.pendingComments || 0 }}</span>
+          </div>
+          <el-button type="primary" @click="goPending()">立即处理</el-button>
+        </div>
+
         <div v-if="overview" class="stat-grid">
           <StatCard label="站点" :value="overview.counts.sites" />
           <StatCard label="用户" :value="overview.counts.users" />
           <StatCard label="批注" :value="overview.counts.annotations" />
-          <StatCard
-            label="待审批注"
-            :value="overview.counts.pendingAnnotations"
-            hint="等待处理"
-          />
+          <div class="stat-click" @click="goPending('annotation')">
+            <StatCard label="待审批注" :value="overview.counts.pendingAnnotations" hint="点击处理" />
+          </div>
           <StatCard label="评论" :value="overview.counts.comments" />
-          <StatCard
-            label="待审评论"
-            :value="overview.counts.pendingComments"
-            hint="等待处理"
-          />
+          <div class="stat-click" @click="goPending('comment')">
+            <StatCard label="待审评论" :value="overview.counts.pendingComments" hint="点击处理" />
+          </div>
         </div>
 
         <div class="section">
@@ -113,3 +130,32 @@ onMounted(load)
     </template>
   </div>
 </template>
+
+<style scoped>
+.pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--el-color-warning-light-5);
+  border-radius: 10px;
+  background: var(--el-color-warning-light-9);
+}
+.pending-banner strong {
+  margin-right: 4px;
+  font-size: 20px;
+  color: var(--el-color-warning-dark-2);
+}
+.pending-banner .muted {
+  margin-left: 10px;
+}
+.stat-click {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.stat-click:hover {
+  transform: translateY(-2px);
+}
+</style>

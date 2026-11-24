@@ -71,11 +71,14 @@ export type Annotation = {
   pageKey: string
   pageTitle: string
   quoteExact: string
+  section?: string
   status: 'open' | 'resolved'
   moderation: 'pending' | 'approved' | 'rejected'
   visibility: string
   author: Author
   createdAt: string
+  updatedAt?: string
+  comments?: Comment[]
 }
 
 export type Comment = {
@@ -87,6 +90,33 @@ export type Comment = {
   visibility: string
   author: Author
   createdAt: string
+}
+
+export type AnnotationBrief = {
+  id: number
+  pageKey: string
+  pageTitle: string
+  quoteExact: string
+  section?: string
+  status: 'open' | 'resolved'
+  moderation: 'pending' | 'approved' | 'rejected'
+  visibility: string
+  author: Author
+}
+
+export type ModerationComment = Comment & {
+  parent?: AnnotationBrief
+}
+
+export type StatusCounts = {
+  pending: number
+  approved: number
+  rejected: number
+}
+
+export type ModerationCounts = {
+  annotations: StatusCounts
+  comments: StatusCounts
 }
 
 export type OverviewPending = {
@@ -116,9 +146,10 @@ export type Overview = {
 
 export type Queue = {
   annotations: Annotation[]
-  comments: Comment[]
+  comments: ModerationComment[]
   annotationCursor: number
   commentCursor: number
+  counts: ModerationCounts
 }
 
 export type AdminAuthProviders = {

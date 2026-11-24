@@ -149,6 +149,8 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 - 登录：全局 GitHub 或任意启用站点的 OIDC 提供商；
 - 超管：概览、站点管理、站点管理员、全局用户封禁、审核、OIDC 提供商；
 - 站点管理员：仅被分配站点的审核、封禁与 OIDC 配置；
+- 审核工作台：按状态 / 类型筛选，服务端搜索，状态计数；评论会带出所属批注的引用、页面与讨论上下文；
+- 批量处理：通过 / 拒绝 / 隐藏 / 恢复；单条评论可直接查看完整讨论串或封禁作者；
 - 构建：`make admin`（仅后台）或 `make build`（SDK + 后台 + Go）；
 - 本地开发：`cd admin && npm run dev`，Vite 已代理 `/api` 到 `127.0.0.1:8080`。
 
@@ -202,8 +204,9 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 管理端登录：`/api/v1/admin/auth/providers`、`/api/v1/admin/auth/local/login`、
 `/api/v1/admin/auth/github/start`、`/api/v1/admin/auth/oidc/{id}/start`。
 
-管理：`/api/v1/admin/sites`、`/admin/sites/{id}/queue`、
-`/admin/sites/{id}/annotations/{id}/moderate`、`/admin/sites/{id}/providers` 等。
+管理：`/api/v1/admin/sites`、`/admin/sites/{id}/queue?status=&type=&q=`、
+`/admin/sites/{id}/annotations/{id}`、`/admin/sites/{id}/annotations/{id}/moderate`、
+`/admin/sites/{id}/comments/{id}/moderate`、`/admin/sites/{id}/providers` 等。
 
 错误统一为：
 

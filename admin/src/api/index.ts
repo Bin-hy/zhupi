@@ -1,6 +1,7 @@
 import { http } from './client'
 import type {
   AdminAuthProviders,
+  Annotation,
   Comment,
   CreateSiteInput,
   Me,
@@ -93,15 +94,25 @@ export const api = {
     http.request<void>(`/admin/sites/${siteId}/providers/${providerId}`, { method: 'DELETE' }),
 
   // 审核
-  queue: (siteId: number, status: string, annotationCursor = 0, commentCursor = 0, limit = 50) =>
+  queue: (
+    siteId: number,
+    status: string,
+    keyword = '',
+    type = 'all',
+    annotationCursor = 0,
+    commentCursor = 0,
+    limit = 50,
+  ) =>
     http.request<Queue>(
-      `/admin/sites/${siteId}/queue${q({ status, annotationCursor, commentCursor, limit })}`,
+      `/admin/sites/${siteId}/queue${q({ status, q: keyword, type, annotationCursor, commentCursor, limit })}`,
     ),
   moderateAnnotation: (siteId: number, id: number, action: string) =>
     http.request<void>(`/admin/sites/${siteId}/annotations/${id}/moderate`, {
       method: 'POST',
       body: JSON.stringify({ action }),
     }),
+  annotationDetail: (siteId: number, id: number) =>
+    http.request<Annotation>(`/admin/sites/${siteId}/annotations/${id}`),
   moderateComment: (siteId: number, id: number, action: string) =>
     http.request<void>(`/admin/sites/${siteId}/comments/${id}/moderate`, {
       method: 'POST',

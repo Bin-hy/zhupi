@@ -1,4 +1,4 @@
-.PHONY: sdk server build test clean
+.PHONY: sdk admin server build test clean
 
 sdk:
 	cd sdk && npm ci && npm run build

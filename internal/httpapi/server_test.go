@@ -24,6 +24,7 @@ type testEnv struct {
 	ts    *httptest.Server
 	store *store.Store
 	sites *service.SiteService
+	auth  *service.AuthService
 	cfg   *config.Config
 }
 
@@ -39,22 +40,23 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { _ = st.Close() })
 
 	cfg := &config.Config{
-		Addr:                ":0",
-		DBPath:              "x",
-		PublicBaseURL:       "http://127.0.0.1",
-		SecretKey:           bytes.Repeat([]byte{1}, 32),
-		SessionTTL:          time.Hour,
-		DevLogin:            true,
-		ReadRatePerMin:      100000,
-		WriteRatePerMin:     100000,
-		WriteUserRatePerMin: 100000,
-		AdminOrigins:        []string{"http://admin.test"},
+		Addr:                 ":0",
+		DBPath:               "x",
+		PublicBaseURL:        "http://127.0.0.1",
+		SecretKey:            bytes.Repeat([]byte{1}, 32),
+		SessionTTL:           time.Hour,
+		DevLogin:             true,
+		ReadRatePerMin:       100000,
+		WriteRatePerMin:      100000,
+		WriteUserRatePerMin:  100000,
+		LocalLoginRatePerMin: 100000,
+		AdminOrigins:         []string{"http://admin.test"},
 	}
 	box, _ := crypto.New(cfg.SecretKey)
 	github := authpkg.NewGitHubClient(authpkg.GitHubConfig{}, nil)
 	oidc := authpkg.NewOIDCClient(nil)
 	sites := service.NewSiteService(st, false)
-	authSvc := service.NewAuthService(cfg, st, st, st, st, st, box, github, oidc)
+	authSvc := service.NewAuthService(cfg, st, st, st, st, st, st, box, github, oidc)
 	annotations := service.NewAnnotationService(st, st)
 	moderation := service.NewModerationService(st, st, st, st, st)
 	admin := service.NewAdminService(st, st, st, st, st, st)
@@ -62,7 +64,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	srv := New(cfg, st, sites, authSvc, annotations, moderation, admin, log)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return &testEnv{ts: ts, store: st, sites: sites, cfg: cfg}
+	return &testEnv{ts: ts, store: st, sites: sites, auth: authSvc, cfg: cfg}
 }
 
 func (e *testEnv) site(t *testing.T, name, origin string, mode domain.ModerationMode) domain.Site {

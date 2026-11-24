@@ -177,11 +177,32 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":           p.User.ID,
-		"displayName":  p.User.DisplayName,
-		"avatarUrl":    p.User.AvatarURL,
-		"isSuperadmin": p.IsSuperadmin,
+		"id":                 p.User.ID,
+		"displayName":        p.User.DisplayName,
+		"avatarUrl":          p.User.AvatarURL,
+		"isSuperadmin":       p.IsSuperadmin,
+		"username":           p.LocalUsername,
+		"mustChangePassword": p.MustChangePassword,
 	})
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	var req changePasswordRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	p, _ := PrincipalFrom(r.Context())
+	sess, _ := SessionFrom(r.Context())
+	if err := s.auth.ChangePassword(r.Context(), p.User.ID, sess.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		s.writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleListIdentities(w http.ResponseWriter, r *http.Request) {

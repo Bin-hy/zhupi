@@ -23,6 +23,7 @@ type Server struct {
 	readLimiter      *ratelimit.Limiter
 	writeLimiter     *ratelimit.Limiter
 	userWriteLimiter *ratelimit.Limiter
+	loginLimiter     *ratelimit.Limiter
 	logger           *slog.Logger
 }
 
@@ -34,6 +35,7 @@ func New(cfg *config.Config, st *store.Store, sites *service.SiteService, authSv
 		readLimiter:      ratelimit.New(cfg.ReadRatePerMin),
 		writeLimiter:     ratelimit.New(cfg.WriteRatePerMin),
 		userWriteLimiter: ratelimit.New(cfg.WriteUserRatePerMin),
+		loginLimiter:     ratelimit.New(cfg.LocalLoginRatePerMin),
 		logger:           logger,
 	}
 }
@@ -53,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 管理端登录（公开）
 	mux.Handle("GET /api/v1/admin/auth/providers", chain(http.HandlerFunc(s.handleAdminProviders), s.readLimit))
+	mux.Handle("POST /api/v1/admin/auth/local/login", chain(http.HandlerFunc(s.handleLocalLogin), s.loginLimit))
 	mux.Handle("GET /api/v1/admin/auth/github/start", chain(http.HandlerFunc(s.handleAdminGitHubStart), s.readLimit))
 	mux.Handle("GET /api/v1/admin/auth/oidc/{providerID}/start", chain(http.HandlerFunc(s.handleAdminOIDCStart), s.readLimit))
 
@@ -75,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 账号
 	mux.Handle("GET /api/v1/me", s.account(s.handleMe))
+	mux.Handle("POST /api/v1/me/password", s.account(s.handleChangePassword))
 	mux.Handle("GET /api/v1/me/sites", s.account(s.handleMeSites))
 	mux.Handle("GET /api/v1/me/identities", s.account(s.handleListIdentities))
 	mux.Handle("DELETE /api/v1/me/identities/{id}", s.account(s.handleUnbindIdentity))
@@ -87,17 +91,17 @@ func (s *Server) Handler() http.Handler {
 		chain(http.HandlerFunc(s.handleBindOIDCStart), s.siteResolve, s.requireAuth, s.resolveSiteRole))
 
 	// 管理：站点与用户
-	mux.Handle("GET /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminListSites), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminCreateSite), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("PATCH /api/v1/admin/sites/{id}", chain(http.HandlerFunc(s.handleAdminUpdateSite), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites/{id}/rotate-key", chain(http.HandlerFunc(s.handleAdminRotateKey), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("GET /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminListAdmins), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminAddAdmin), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("DELETE /api/v1/admin/sites/{id}/admins/{userID}", chain(http.HandlerFunc(s.handleAdminRemoveAdmin), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("GET /api/v1/admin/overview", chain(http.HandlerFunc(s.handleAdminOverview), s.requireAuth))
-	mux.Handle("GET /api/v1/admin/users", chain(http.HandlerFunc(s.handleAdminListUsers), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalBan), s.requireAuth, s.requireSuperadmin))
-	mux.Handle("DELETE /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalUnban), s.requireAuth, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminListSites), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminCreateSite), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("PATCH /api/v1/admin/sites/{id}", chain(http.HandlerFunc(s.handleAdminUpdateSite), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites/{id}/rotate-key", chain(http.HandlerFunc(s.handleAdminRotateKey), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminListAdmins), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminAddAdmin), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("DELETE /api/v1/admin/sites/{id}/admins/{userID}", chain(http.HandlerFunc(s.handleAdminRemoveAdmin), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/overview", chain(http.HandlerFunc(s.handleAdminOverview), s.requireAuth, s.requirePasswordChanged))
+	mux.Handle("GET /api/v1/admin/users", chain(http.HandlerFunc(s.handleAdminListUsers), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalBan), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("DELETE /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalUnban), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
 
 	// 管理：站点级审核与提供商
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/queue", s.adminSite(s.handleAdminQueue))
@@ -115,7 +119,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) adminSite(h http.HandlerFunc) http.Handler {
-	return chain(h, s.requireAuth)
+	return chain(h, s.requireAuth, s.requirePasswordChanged)
 }
 
 func itoa(v int64) string { return strconv.FormatInt(v, 10) }

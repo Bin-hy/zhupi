@@ -99,6 +99,15 @@ func (a *AdminService) Overview(ctx context.Context, p domain.Principal) (Overvi
 	if err != nil {
 		return Overview{}, err
 	}
+	if sites == nil {
+		sites = []domain.Site{}
+	}
+	if recentAnnotations == nil {
+		recentAnnotations = []domain.OverviewPending{}
+	}
+	if recentComments == nil {
+		recentComments = []domain.OverviewPending{}
+	}
 	return Overview{
 		Counts:            counts,
 		Sites:             sites,

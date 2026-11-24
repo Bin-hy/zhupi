@@ -39,6 +39,7 @@ type AuthService struct {
 	sessions   store.SessionRepo
 	flows      store.AuthFlowRepo
 	providers  store.ProviderRepo
+	localCreds store.LocalCredentialRepo
 	box        *crypto.SecretBox
 	github     *authpkg.GitHubClient
 	oidc       *authpkg.OIDCClient
@@ -47,12 +48,219 @@ type AuthService struct {
 
 func NewAuthService(cfg *config.Config, users store.UserRepo, identities store.IdentityRepo,
 	sessions store.SessionRepo, flows store.AuthFlowRepo, providers store.ProviderRepo,
-	box *crypto.SecretBox, github *authpkg.GitHubClient, oidc *authpkg.OIDCClient) *AuthService {
+	localCreds store.LocalCredentialRepo, box *crypto.SecretBox,
+	github *authpkg.GitHubClient, oidc *authpkg.OIDCClient) *AuthService {
 	return &AuthService{
 		cfg: cfg, users: users, identities: identities, sessions: sessions,
-		flows: flows, providers: providers, box: box, github: github, oidc: oidc,
+		flows: flows, providers: providers, localCreds: localCreds,
+		box: box, github: github, oidc: oidc,
 		now: time.Now,
 	}
+}
+
+// LocalAdminBootstrap 描述启动时本地管理员初始化的结果。
+type LocalAdminBootstrap struct {
+	Created            bool
+	Reset              bool
+	Skipped            bool
+	Username           string
+	MustChangePassword bool
+}
+
+// BootstrapLocalAdmin 在启动时保证存在一个本地超级管理员账号。
+// 默认只在没有任何本地凭据时创建；LOCAL_ADMIN_RESET_PASSWORD=1 时强制重置密码。
+func (a *AuthService) BootstrapLocalAdmin(ctx context.Context) (LocalAdminBootstrap, error) {
+	username := strings.TrimSpace(a.cfg.LocalAdminUsername)
+	if username == "" {
+		username = "admin"
+	}
+	password := a.cfg.LocalAdminPassword
+	if password == "" {
+		password = "admin"
+	}
+	mustChange := password == "admin"
+
+	count, err := a.localCreds.CountLocalCredentials(ctx)
+	if err != nil {
+		return LocalAdminBootstrap{}, err
+	}
+	if count == 0 {
+		if password != "admin" {
+			if err := authpkg.ValidatePassword(password); err != nil {
+				return LocalAdminBootstrap{}, domain.WrapError("local_admin_password_invalid", "本地管理员初始密码不符合要求", 500, err)
+			}
+		}
+		hash, err := authpkg.HashPassword(password)
+		if err != nil {
+			return LocalAdminBootstrap{}, domain.WrapError("local_admin_password_invalid", "本地管理员初始密码不符合要求", 500, err)
+		}
+		user, err := a.users.CreateUser(ctx, domain.User{
+			DisplayName:  username,
+			Status:       domain.UserActive,
+			IsSuperadmin: true,
+		})
+		if err != nil {
+			return LocalAdminBootstrap{}, err
+		}
+		if err := a.localCreds.CreateLocalCredential(ctx, domain.LocalCredential{
+			UserID:             user.ID,
+			Username:           username,
+			PasswordHash:       hash,
+			MustChangePassword: mustChange,
+		}); err != nil {
+			return LocalAdminBootstrap{}, err
+		}
+		return LocalAdminBootstrap{
+			Created: true, Username: username, MustChangePassword: mustChange,
+		}, nil
+	}
+
+	cred, err := a.localCreds.LocalCredentialByUsername(ctx, username)
+	if errors.Is(err, domain.ErrNotFound) {
+		// 已存在本地账号但环境变量用户名不同：不创建第二个，避免误建后门账号。
+		return LocalAdminBootstrap{Skipped: true}, nil
+	}
+	if err != nil {
+		return LocalAdminBootstrap{}, err
+	}
+	if !a.cfg.LocalAdminResetPassword {
+		return LocalAdminBootstrap{Skipped: true, Username: cred.Username}, nil
+	}
+	if password != "admin" {
+		if err := authpkg.ValidatePassword(password); err != nil {
+			return LocalAdminBootstrap{}, domain.WrapError("local_admin_password_invalid", "LOCAL_ADMIN_PASSWORD 不符合要求", 500, err)
+		}
+	}
+	hash, err := authpkg.HashPassword(password)
+	if err != nil {
+		return LocalAdminBootstrap{}, domain.WrapError("local_admin_password_invalid", "LOCAL_ADMIN_PASSWORD 不符合要求", 500, err)
+	}
+	if err := a.localCreds.UpdateLocalCredentialPassword(ctx, cred.UserID, hash, mustChange); err != nil {
+		return LocalAdminBootstrap{}, err
+	}
+	if err := a.sessions.RevokeAllSessionsForUser(ctx, cred.UserID); err != nil {
+		return LocalAdminBootstrap{}, err
+	}
+	return LocalAdminBootstrap{
+		Reset: true, Username: cred.Username, MustChangePassword: mustChange,
+	}, nil
+}
+
+// LocalLoginResult 是本地账号密码登录的结果。
+type LocalLoginResult struct {
+	Token              string
+	ExpiresAt          time.Time
+	User               domain.User
+	MustChangePassword bool
+}
+
+// LocalLogin 校验本地管理员账号密码并创建会话。
+func (a *AuthService) LocalLogin(ctx context.Context, username, password string, meta ClientMeta) (LocalLoginResult, error) {
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		return LocalLoginResult{}, domain.Unauthorized("用户名或密码错误")
+	}
+	cred, err := a.localCreds.LocalCredentialByUsername(ctx, username)
+	if errors.Is(err, domain.ErrNotFound) {
+		authpkg.VerifyDummy(password)
+		return LocalLoginResult{}, domain.Unauthorized("用户名或密码错误")
+	}
+	if err != nil {
+		return LocalLoginResult{}, err
+	}
+	if !authpkg.VerifyPassword(cred.PasswordHash, password) {
+		return LocalLoginResult{}, domain.Unauthorized("用户名或密码错误")
+	}
+	user, err := a.users.UserByID(ctx, cred.UserID)
+	if err != nil {
+		return LocalLoginResult{}, err
+	}
+	if user.Status == domain.UserBanned {
+		return LocalLoginResult{}, domain.Forbidden("user_banned", "账号已被封禁")
+	}
+	raw, hash, err := authpkg.NewToken()
+	if err != nil {
+		return LocalLoginResult{}, err
+	}
+	now := a.now()
+	expires := now.Add(a.cfg.SessionTTL)
+	if err := a.sessions.CreateSession(ctx, domain.Session{
+		TokenHash:  hash,
+		UserID:     user.ID,
+		UserAgent:  truncate(meta.UserAgent, 255),
+		IP:         truncate(meta.IP, 64),
+		CreatedAt:  now,
+		ExpiresAt:  expires,
+		LastSeenAt: now,
+	}); err != nil {
+		return LocalLoginResult{}, err
+	}
+	return LocalLoginResult{
+		Token: raw, ExpiresAt: expires, User: user, MustChangePassword: cred.MustChangePassword,
+	}, nil
+}
+
+// ChangePassword 修改本地账号密码，并吊销除当前会话外的其他会话。
+func (a *AuthService) ChangePassword(ctx context.Context, userID, currentSessionID int64, current, next string) error {
+	cred, err := a.localCreds.LocalCredentialByUserID(ctx, userID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.Invalid("local_credential_missing", "当前账号未设置本地密码")
+	}
+	if err != nil {
+		return err
+	}
+	if !authpkg.VerifyPassword(cred.PasswordHash, current) {
+		return domain.Invalid("invalid_current_password", "当前密码不正确")
+	}
+	if current == next {
+		return domain.Invalid("password_unchanged", "新密码不能与当前密码相同")
+	}
+	if err := authpkg.ValidatePassword(next); err != nil {
+		return domain.Invalid("weak_password", err.Error())
+	}
+	hash, err := authpkg.HashPassword(next)
+	if err != nil {
+		return err
+	}
+	if err := a.localCreds.UpdateLocalCredentialPassword(ctx, userID, hash, false); err != nil {
+		return err
+	}
+	if currentSessionID != 0 {
+		return a.sessions.RevokeOtherSessionsForUser(ctx, userID, currentSessionID)
+	}
+	return a.sessions.RevokeAllSessionsForUser(ctx, userID)
+}
+
+// ResetLocalPassword 供 CLI 使用：重置本地账号密码并吊销全部会话。
+func (a *AuthService) ResetLocalPassword(ctx context.Context, username, password string) (domain.LocalCredential, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return domain.LocalCredential{}, domain.Invalid("validation_error", "需要用户名")
+	}
+	cred, err := a.localCreds.LocalCredentialByUsername(ctx, username)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.LocalCredential{}, domain.NotFound("本地管理员账号不存在，请先启动一次服务完成初始化")
+	}
+	if err != nil {
+		return domain.LocalCredential{}, err
+	}
+	if password != "admin" {
+		if err := authpkg.ValidatePassword(password); err != nil {
+			return domain.LocalCredential{}, domain.Invalid("weak_password", err.Error())
+		}
+	}
+	hash, err := authpkg.HashPassword(password)
+	if err != nil {
+		return domain.LocalCredential{}, err
+	}
+	if err := a.localCreds.UpdateLocalCredentialPassword(ctx, cred.UserID, hash, password == "admin"); err != nil {
+		return domain.LocalCredential{}, err
+	}
+	if err := a.sessions.RevokeAllSessionsForUser(ctx, cred.UserID); err != nil {
+		return domain.LocalCredential{}, err
+	}
+	cred.MustChangePassword = password == "admin"
+	return cred, nil
 }
 
 func (a *AuthService) StartGitHub(ctx context.Context, site domain.Site, returnTo string) (string, error) {
@@ -101,6 +309,7 @@ type AdminProviderView struct {
 
 type AdminAuthProviders struct {
 	GitHub    bool                `json:"github"`
+	Local     bool                `json:"local"`
 	Providers []AdminProviderView `json:"providers"`
 }
 
@@ -112,6 +321,11 @@ func (a *AuthService) AdminProviders(ctx context.Context) (AdminAuthProviders, e
 	out := AdminAuthProviders{
 		GitHub:    a.github != nil && a.github.Configured(),
 		Providers: make([]AdminProviderView, 0, len(list)),
+	}
+	if a.localCreds != nil {
+		if n, err := a.localCreds.CountLocalCredentials(ctx); err == nil && n > 0 {
+			out.Local = true
+		}
 	}
 	for _, item := range list {
 		out.Providers = append(out.Providers, AdminProviderView{
@@ -482,7 +696,20 @@ func (a *AuthService) AuthenticateSession(ctx context.Context, rawToken string) 
 	if a.now().Sub(sess.LastSeenAt) > 5*time.Minute {
 		_ = a.sessions.TouchSession(ctx, sess.ID, a.now().Unix())
 	}
-	return domain.Principal{User: user, IsSuperadmin: user.IsSuperadmin}, sess, nil
+	p := domain.Principal{User: user, IsSuperadmin: user.IsSuperadmin}
+	if a.localCreds != nil {
+		cred, err := a.localCreds.LocalCredentialByUserID(ctx, user.ID)
+		switch {
+		case err == nil:
+			p.LocalUsername = cred.Username
+			p.MustChangePassword = cred.MustChangePassword
+		case errors.Is(err, domain.ErrNotFound):
+			// 非本地账号，忽略。
+		default:
+			return domain.Principal{}, domain.Session{}, err
+		}
+	}
+	return p, sess, nil
 }
 
 func (a *AuthService) Logout(ctx context.Context, userID, sessionID int64) error {

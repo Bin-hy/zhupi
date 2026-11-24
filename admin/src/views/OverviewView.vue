@@ -64,7 +64,11 @@ onMounted(load)
 
         <div class="section">
           <h2 class="section-title">最近待审批注</h2>
-          <el-table v-if="overview?.recentAnnotations.length" :data="overview.recentAnnotations" border>
+          <el-table
+            v-if="overview?.recentAnnotations?.length"
+            :data="overview.recentAnnotations"
+            border
+          >
             <el-table-column prop="siteName" label="站点" width="140" />
             <el-table-column label="作者" width="140">
               <template #default="{ row }">{{ row.author.name }}</template>
@@ -84,7 +88,11 @@ onMounted(load)
 
         <div class="section">
           <h2 class="section-title">最近待审评论</h2>
-          <el-table v-if="overview?.recentComments.length" :data="overview.recentComments" border>
+          <el-table
+            v-if="overview?.recentComments?.length"
+            :data="overview.recentComments"
+            border
+          >
             <el-table-column prop="siteName" label="站点" width="140" />
             <el-table-column label="作者" width="140">
               <template #default="{ row }">{{ row.author.name }}</template>

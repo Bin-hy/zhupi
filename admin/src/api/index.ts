@@ -27,8 +27,18 @@ const q = (params: Record<string, string | number | undefined>) => {
 export const api = {
   // 认证
   providers: () => http.request<AdminAuthProviders>('/admin/auth/providers'),
+  localLogin: (username: string, password: string) =>
+    http.request<{ token: string; expiresAt: string; user: User; mustChangePassword: boolean }>(
+      '/admin/auth/local/login',
+      { method: 'POST', body: JSON.stringify({ username, password }) },
+    ),
   me: () => http.request<Me>('/me'),
   mySites: () => http.request<{ sites: Site[] }>('/me/sites'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    http.request<void>('/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   logout: () => http.request<void>('/auth/logout', { method: 'POST' }),
 
   // 概览

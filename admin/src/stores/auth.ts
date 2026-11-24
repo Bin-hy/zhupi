@@ -17,7 +17,7 @@ export async function loadSession(): Promise<void> {
   const me = await api.me()
   const sites = await api.mySites()
   auth.me = me
-  auth.sites = sites.sites
+  auth.sites = sites.sites ?? []
   auth.loaded = true
 }
 
@@ -30,6 +30,10 @@ export function resetSession(): void {
 
 export function isSuperadmin(): boolean {
   return !!auth.me?.isSuperadmin
+}
+
+export function mustChangePassword(): boolean {
+  return !!auth.me?.mustChangePassword
 }
 
 export function canAccessSite(id: number): boolean {
@@ -47,6 +51,15 @@ export function loginGitHub(): void {
 
 export function loginOIDC(providerId: number): void {
   redirectStart(`/api/v1/admin/auth/oidc/${providerId}/start`)
+}
+
+export async function localLogin(username: string, password: string): Promise<boolean> {
+  const res = await api.localLogin(username, password)
+  http.setToken(res.token)
+  auth.me = null
+  auth.sites = []
+  auth.loaded = false
+  return res.mustChangePassword
 }
 
 export async function logout(): Promise<void> {

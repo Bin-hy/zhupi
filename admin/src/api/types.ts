@@ -3,6 +3,8 @@ export type Me = {
   displayName: string
   avatarUrl: string
   isSuperadmin: boolean
+  username: string
+  mustChangePassword: boolean
 }
 
 export type Site = {
@@ -121,6 +123,7 @@ export type Queue = {
 
 export type AdminAuthProviders = {
   github: boolean
+  local: boolean
   providers: Array<{
     id: number
     siteId: number

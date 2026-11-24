@@ -43,8 +43,17 @@ type SessionRepo interface {
 	ListSessionsByUser(ctx context.Context, userID int64) ([]domain.Session, error)
 	RevokeSession(ctx context.Context, id, userID int64) error
 	RevokeAllSessionsForUser(ctx context.Context, userID int64) error
+	RevokeOtherSessionsForUser(ctx context.Context, userID, keepSessionID int64) error
 	TouchSession(ctx context.Context, id int64, at int64) error
 	PurgeExpiredSessions(ctx context.Context) error
+}
+
+type LocalCredentialRepo interface {
+	CreateLocalCredential(ctx context.Context, c domain.LocalCredential) error
+	LocalCredentialByUsername(ctx context.Context, username string) (domain.LocalCredential, error)
+	LocalCredentialByUserID(ctx context.Context, userID int64) (domain.LocalCredential, error)
+	CountLocalCredentials(ctx context.Context) (int, error)
+	UpdateLocalCredentialPassword(ctx context.Context, userID int64, hash string, mustChange bool) error
 }
 
 type AuthFlowRepo interface {

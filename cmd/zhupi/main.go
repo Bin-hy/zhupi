@@ -73,7 +73,20 @@ func runServe() {
 	oidcClient := authpkg.NewOIDCClient(nil)
 
 	sites := service.NewSiteService(st, cfg.AllowMissingOrigin)
-	authSvc := service.NewAuthService(cfg, st, st, st, st, st, box, github, oidcClient)
+	authSvc := service.NewAuthService(cfg, st, st, st, st, st, st, box, github, oidcClient)
+	boot, err := authSvc.BootstrapLocalAdmin(context.Background())
+	if err != nil {
+		log.Error("初始化本地管理员失败", "err", err)
+		os.Exit(1)
+	}
+	switch {
+	case boot.Created:
+		log.Info("已创建本地超级管理员", "username", boot.Username, "mustChangePassword", boot.MustChangePassword)
+	case boot.Reset:
+		log.Warn("已按 LOCAL_ADMIN_RESET_PASSWORD 重置本地管理员密码", "username", boot.Username, "mustChangePassword", boot.MustChangePassword)
+	case boot.Skipped:
+		log.Info("本地管理员已存在，跳过初始化", "username", boot.Username)
+	}
 	annotations := service.NewAnnotationService(st, st)
 	moderation := service.NewModerationService(st, st, st, st, st)
 	admin := service.NewAdminService(st, st, st, st, st, st)
@@ -119,7 +132,7 @@ func runServe() {
 func runAdmin(args []string) {
 	log := logger()
 	if len(args) == 0 {
-		fmt.Println("用法: zhupi admin <migrate|site|promote|users> [...]")
+		fmt.Println("用法: zhupi admin <migrate|site|promote|users|password> [...]")
 		os.Exit(2)
 	}
 	cfg, err := config.Load()
@@ -141,11 +154,14 @@ func runAdmin(args []string) {
 
 	sites := service.NewSiteService(st, true)
 	adminSvc := service.NewAdminService(st, st, st, st, st, st)
+	authSvc := service.NewAuthService(cfg, st, st, st, st, st, st, nil, nil, nil)
 	super := domain.Principal{User: domain.User{ID: 0, DisplayName: "cli"}, IsSuperadmin: true}
 
 	switch args[0] {
 	case "migrate":
 		fmt.Println("迁移完成")
+	case "password":
+		runPasswordCLI(ctx, authSvc, args[1:])
 	case "site":
 		runSiteCLI(ctx, st, sites, adminSvc, super, args[1:])
 	case "promote":
@@ -190,6 +206,37 @@ func runAdmin(args []string) {
 	default:
 		fail("未知命令: %s", args[0])
 	}
+}
+
+func runPasswordCLI(ctx context.Context, authSvc *service.AuthService, args []string) {
+	if len(args) == 0 || args[0] != "reset" {
+		fail("用法: admin password reset --username <name> [--password <pwd>]")
+	}
+	fs := flag.NewFlagSet("password reset", flag.ExitOnError)
+	username := fs.String("username", "admin", "本地管理员用户名")
+	password := fs.String("password", "", "新密码；省略时生成随机密码")
+	_ = fs.Parse(args[1:])
+
+	pwd := *password
+	generated := false
+	if pwd == "" {
+		var err error
+		pwd, err = authpkg.GeneratePassword()
+		if err != nil {
+			fail("生成随机密码失败: %v", err)
+		}
+		generated = true
+	}
+	cred, err := authSvc.ResetLocalPassword(ctx, *username, pwd)
+	if err != nil {
+		fail("重置密码失败: %v", err)
+	}
+	if generated {
+		fmt.Printf("已重置 %s 的密码：%s\n", cred.Username, pwd)
+	} else {
+		fmt.Printf("已重置 %s 的密码\n", cred.Username)
+	}
+	fmt.Println("该账号的所有会话已失效。")
 }
 
 func runSiteCLI(ctx context.Context, st *store.Store, sites *service.SiteService,

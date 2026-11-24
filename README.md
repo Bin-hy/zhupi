@@ -9,7 +9,7 @@
 
 - **多站点隔离**：公开 siteKey + 来源白名单，批注/评论按站点隔离
 - **可嵌入 SDK**：Shadow DOM UI，不污染宿主样式，支持 ESM / `<script>` 两种引入
-- **登录**：全局 GitHub OAuth + 每站点独立 OIDC；首次登录自动建号，支持手动绑定多身份
+- **登录**：全局 GitHub OAuth + 每站点独立 OIDC + 本地超管兜底账号；首次登录自动建号，支持手动绑定多身份
 - **治理**：超管 / 站点管理员两级权限，站点级「先发后审 / 先审后发」
 - **自托管友好**：单二进制 + SQLite（WAL）+ 内嵌 SDK，Docker 一键部署
 
@@ -152,11 +152,37 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 - 构建：`make admin`（仅后台）或 `make build`（SDK + 后台 + Go）；
 - 本地开发：`cd admin && npm run dev`，Vite 已代理 `/api` 到 `127.0.0.1:8080`。
 
-首次使用需要把某个 GitHub 用户提升为超管：
+首次启动会自动创建一个本地超级管理员（默认 `admin` / `admin`），登录后强制修改密码。
+也可以用 GitHub 登录后再提升超管：
 
 ```bash
 ./bin/zhupi admin promote --github-login <你的 GitHub 登录名>
 ```
+
+### 本地管理员账号
+
+本地账号只用于超级管理员兜底登录，站点管理员仍走 GitHub / OIDC。
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `LOCAL_ADMIN_USERNAME` | `admin` | 本地账号用户名 |
+| `LOCAL_ADMIN_PASSWORD` | `admin` | 初始密码；等于 `admin` 时首次登录强制改密 |
+| `LOCAL_ADMIN_RESET_PASSWORD` | `0` | 设为 `1` 时，启动后用上面的密码重置并吊销会话 |
+| `LOCAL_LOGIN_RATE_PER_MIN` | `10` | 本地登录每 IP 每分钟限流 |
+
+- 初始化只在数据库中不存在本地凭据时执行，重启不会覆盖后台改过的密码。
+- 修改密码：登录后台 → 右上角用户菜单 → **账号设置**。
+- 忘记密码时在服务器上重置：
+
+```bash
+# 生成随机密码并打印一次
+./bin/zhupi admin password reset --username admin
+
+# 或指定新密码
+./bin/zhupi admin password reset --username admin --password 'your-new-password'
+```
+
+重置会吊销该账号的全部会话。
 
 ## API 概览
 
@@ -171,7 +197,10 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 | POST | `/api/v1/annotations/{id}/comments` |
 | DELETE | `/api/v1/comments/{id}` |
 
-账号：`/api/v1/me`、`/api/v1/me/identities`、`/api/v1/me/sessions`。
+账号：`/api/v1/me`、`/api/v1/me/password`、`/api/v1/me/identities`、`/api/v1/me/sessions`。
+
+管理端登录：`/api/v1/admin/auth/providers`、`/api/v1/admin/auth/local/login`、
+`/api/v1/admin/auth/github/start`、`/api/v1/admin/auth/oidc/{id}/start`。
 
 管理：`/api/v1/admin/sites`、`/admin/sites/{id}/queue`、
 `/admin/sites/{id}/annotations/{id}/moderate`、`/admin/sites/{id}/providers` 等。

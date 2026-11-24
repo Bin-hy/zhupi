@@ -19,6 +19,10 @@ type Config struct {
 	SessionTTL     time.Duration
 	GitHubClientID string
 	GitHubSecret   string
+	// 本地超级管理员账号密码登录（仅用于后台兜底）。
+	LocalAdminUsername      string
+	LocalAdminPassword      string
+	LocalAdminResetPassword bool
 	// SuperadminGitHubLogins 命中时，该 GitHub 用户登录后自动成为超级管理员。
 	SuperadminGitHubLogins map[string]bool
 	TrustProxy             bool
@@ -28,19 +32,23 @@ type Config struct {
 	ReadRatePerMin         int
 	WriteRatePerMin        int
 	WriteUserRatePerMin    int
+	LocalLoginRatePerMin   int
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		Addr:                   getenv("ADDR", ":8080"),
-		DBPath:                 getenv("DB_PATH", "zhupi.db"),
-		PublicBaseURL:          strings.TrimRight(getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080"), "/"),
-		GitHubClientID:         os.Getenv("GITHUB_CLIENT_ID"),
-		GitHubSecret:           os.Getenv("GITHUB_CLIENT_SECRET"),
-		SuperadminGitHubLogins: map[string]bool{},
-		TrustProxy:             getenv("TRUST_PROXY", "") == "1",
-		DevLogin:               getenv("DEV_LOGIN", "") == "1",
-		AllowMissingOrigin:     getenv("ALLOW_MISSING_ORIGIN", "") == "1",
+		Addr:                    getenv("ADDR", ":8080"),
+		DBPath:                  getenv("DB_PATH", "zhupi.db"),
+		PublicBaseURL:           strings.TrimRight(getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080"), "/"),
+		GitHubClientID:          os.Getenv("GITHUB_CLIENT_ID"),
+		GitHubSecret:            os.Getenv("GITHUB_CLIENT_SECRET"),
+		LocalAdminUsername:      getenv("LOCAL_ADMIN_USERNAME", "admin"),
+		LocalAdminPassword:      getenv("LOCAL_ADMIN_PASSWORD", "admin"),
+		LocalAdminResetPassword: getenv("LOCAL_ADMIN_RESET_PASSWORD", "") == "1",
+		SuperadminGitHubLogins:  map[string]bool{},
+		TrustProxy:              getenv("TRUST_PROXY", "") == "1",
+		DevLogin:                getenv("DEV_LOGIN", "") == "1",
+		AllowMissingOrigin:      getenv("ALLOW_MISSING_ORIGIN", "") == "1",
 	}
 
 	if u, err := url.Parse(c.PublicBaseURL); err != nil || u.Scheme == "" || u.Host == "" {
@@ -69,6 +77,7 @@ func Load() (*Config, error) {
 	c.ReadRatePerMin = positiveInt(getenv("READ_RATE_PER_MIN", "300"), 300)
 	c.WriteRatePerMin = positiveInt(getenv("WRITE_RATE_PER_MIN", "60"), 60)
 	c.WriteUserRatePerMin = positiveInt(getenv("WRITE_USER_RATE_PER_MIN", "30"), 30)
+	c.LocalLoginRatePerMin = positiveInt(getenv("LOCAL_LOGIN_RATE_PER_MIN", "10"), 10)
 
 	return c, nil
 }

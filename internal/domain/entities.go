@@ -156,6 +156,21 @@ type Principal struct {
 	IsSuperadmin bool
 	SiteID       int64
 	IsSiteAdmin  bool
+	// LocalUsername 非空表示该用户使用本地账号密码登录。
+	LocalUsername string
+	// MustChangePassword 为 true 时，除账号相关接口外禁止访问管理 API。
+	MustChangePassword bool
+}
+
+// LocalCredential 是本地超级管理员的账号密码凭据。
+// 密码只保存 bcrypt 哈希，不进入 User 对象。
+type LocalCredential struct {
+	UserID             int64     `json:"userId"`
+	Username           string    `json:"username"`
+	PasswordHash       string    `json:"-"`
+	MustChangePassword bool      `json:"mustChangePassword"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 func (p Principal) CanModerateSite(siteID int64) bool {

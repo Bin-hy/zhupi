@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Menu, Moon, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
+import { Menu, Moon, Setting, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
 import { auth, isSuperadmin, logout } from '../stores/auth'
 
 const route = useRoute()
@@ -80,6 +80,9 @@ onMounted(() => {
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item :icon="Setting" @click="router.push('/account')">
+                账号设置
+              </el-dropdown-item>
               <el-dropdown-item :icon="SwitchButton" @click="onLogout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>

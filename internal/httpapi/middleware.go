@@ -113,6 +113,18 @@ func (s *Server) requireSuperadmin(next http.Handler) http.Handler {
 	})
 }
 
+// requirePasswordChanged 阻止处于强制改密状态的账号访问管理 API。
+func (s *Server) requirePasswordChanged(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := PrincipalFrom(r.Context())
+		if ok && p.MustChangePassword {
+			s.writeErr(w, r, domain.Forbidden("password_change_required", "首次登录必须修改密码"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) readLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.readLimiter.Allow("ip:" + s.clientIP(r)) {
@@ -135,6 +147,16 @@ func (s *Server) writeLimit(next http.Handler) http.Handler {
 				s.writeErr(w, r, domain.ErrRateLimited)
 				return
 			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) loginLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.loginLimiter.Allow("login:" + s.clientIP(r)) {
+			s.writeErr(w, r, domain.ErrRateLimited)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})

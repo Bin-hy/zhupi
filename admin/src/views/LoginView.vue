@@ -4,12 +4,14 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
 import type { AdminAuthProviders } from '../api/types'
-import { loginGitHub, loginOIDC } from '../stores/auth'
+import { localLogin, loginGitHub, loginOIDC } from '../stores/auth'
 
 const router = useRouter()
-const providers = ref<AdminAuthProviders>({ github: false, providers: [] })
+const providers = ref<AdminAuthProviders>({ github: false, local: false, providers: [] })
 const loading = ref(true)
 const error = ref('')
+const submitting = ref(false)
+const form = ref({ username: 'admin', password: '' })
 
 async function load(): Promise<void> {
   loading.value = true
@@ -37,6 +39,23 @@ function onOIDC(id: number): void {
   loginOIDC(id)
 }
 
+async function onLocalLogin(): Promise<void> {
+  if (!form.value.username.trim() || !form.value.password) {
+    ElMessage.warning('请输入用户名和密码')
+    return
+  }
+  submitting.value = true
+  error.value = ''
+  try {
+    const mustChange = await localLogin(form.value.username.trim(), form.value.password)
+    await router.replace(mustChange ? '/account' : '/')
+  } catch (err: any) {
+    error.value = err?.message || '登录失败'
+  } finally {
+    submitting.value = false
+  }
+}
+
 function goHome(): void {
   void router.replace('/')
 }
@@ -51,6 +70,38 @@ function goHome(): void {
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
 
       <div v-loading="loading" class="login-body">
+        <el-form v-if="providers.local" class="local-form" @submit.prevent="onLocalLogin">
+          <div class="muted">本地管理员账号</div>
+          <el-input
+            v-model="form.username"
+            placeholder="用户名"
+            autocomplete="username"
+            size="large"
+          />
+          <el-input
+            v-model="form.password"
+            type="password"
+            placeholder="密码"
+            autocomplete="current-password"
+            show-password
+            size="large"
+            @keyup.enter="onLocalLogin"
+          />
+          <el-button
+            type="primary"
+            size="large"
+            class="block"
+            :loading="submitting"
+            native-type="submit"
+          >
+            登录
+          </el-button>
+        </el-form>
+
+        <el-divider v-if="providers.local && (providers.github || providers.providers.length)">
+          或
+        </el-divider>
+
         <el-button
           v-if="providers.github"
           type="primary"
@@ -74,7 +125,13 @@ function goHome(): void {
         </div>
 
         <el-empty
-          v-if="!loading && !error && !providers.github && providers.providers.length === 0"
+          v-if="
+            !loading &&
+            !error &&
+            !providers.local &&
+            !providers.github &&
+            providers.providers.length === 0
+          "
           description="服务端尚未配置任何登录方式"
         />
 
@@ -111,6 +168,11 @@ function goHome(): void {
   flex-direction: column;
   gap: 8px;
   margin-top: 4px;
+}
+.local-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .block {
   width: 100%;

@@ -99,6 +99,14 @@ func (s *Store) RevokeAllSessionsForUser(ctx context.Context, userID int64) erro
 	return err
 }
 
+// RevokeOtherSessionsForUser 吊销除 keepSessionID 外的全部会话。
+func (s *Store) RevokeOtherSessionsForUser(ctx context.Context, userID, keepSessionID int64) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL`,
+		time.Now().Unix(), userID, keepSessionID)
+	return err
+}
+
 func (s *Store) TouchSession(ctx context.Context, id int64, at int64) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, at, id)
 	return err

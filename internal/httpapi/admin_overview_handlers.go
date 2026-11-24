@@ -17,6 +17,9 @@ func (s *Server) handleMeSites(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, r, err)
 		return
 	}
+	if sites == nil {
+		sites = []domain.Site{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
 }
 

@@ -141,3 +141,52 @@ func (s *Store) DeleteProvider(ctx context.Context, siteID, id int64) error {
 	}
 	return nil
 }
+
+const providerColumnsQualified = `p.id, p.site_id, p.name, p.issuer, p.client_id, p.client_secret_cipher, p.scopes, p.allowed_email_domains, p.enabled, p.created_at, p.updated_at`
+
+func (s *Store) ProviderByIDAny(ctx context.Context, id int64) (domain.OIDCProvider, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT `+providerColumns+` FROM oidc_providers WHERE id = ?`, id)
+	p, err := scanProvider(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.OIDCProvider{}, domain.ErrNotFound
+	}
+	return p, err
+}
+
+func (s *Store) ListEnabledWithSite(ctx context.Context) ([]ProviderWithSite, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+providerColumnsQualified+`, s.name
+		FROM oidc_providers p JOIN sites s ON s.id = p.site_id
+		WHERE p.enabled = 1
+		ORDER BY s.name ASC, p.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]ProviderWithSite, 0)
+	for rows.Next() {
+		var (
+			p                     domain.OIDCProvider
+			scopesRaw, domainsRaw string
+			enabled               int
+			created, updated      int64
+			siteName              string
+		)
+		if err := rows.Scan(&p.ID, &p.SiteID, &p.Name, &p.Issuer, &p.ClientID, &p.ClientSecretCipher,
+			&scopesRaw, &domainsRaw, &enabled, &created, &updated, &siteName); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(scopesRaw), &p.Scopes); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(domainsRaw), &p.AllowedEmailDomains); err != nil {
+			return nil, err
+		}
+		p.Enabled = enabled != 0
+		p.CreatedAt = fromUnix(created)
+		p.UpdatedAt = fromUnix(updated)
+		out = append(out, ProviderWithSite{Provider: p, SiteID: p.SiteID, SiteName: siteName})
+	}
+	return out, rows.Err()
+}

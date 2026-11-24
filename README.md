@@ -136,6 +136,22 @@ curl -X POST https://annot.example.com/api/v1/admin/sites/1/providers \
 ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 ```
 
+## 管理后台
+
+后台内嵌在 Go 服务的 `/admin/`，与 API 同源：
+
+- 登录：全局 GitHub 或任意启用站点的 OIDC 提供商；
+- 超管：概览、站点管理、站点管理员、全局用户封禁、审核、OIDC 提供商；
+- 站点管理员：仅被分配站点的审核、封禁与 OIDC 配置；
+- 构建：`make admin`（仅后台）或 `make build`（SDK + 后台 + Go）；
+- 本地开发：`cd admin && npm run dev`，Vite 已代理 `/api` 到 `127.0.0.1:8080`。
+
+首次使用需要把某个 GitHub 用户提升为超管：
+
+```bash
+./bin/annotation-service admin promote --github-login <你的 GitHub 登录名>
+```
+
 ## API 概览
 
 公共 / SDK（需要 `X-Site-Key`）：
@@ -189,7 +205,7 @@ make build
 
 ## V1 边界
 
-- 无管理后台 Web UI（管理通过 REST API + CLI）。
+- 管理后台仅内嵌 `/admin`，不做独立子域名部署、审计日志与图表分析。
 - 无邮箱密码 / 找回密码 / 邮件通知 / Webhook。
 - 无敏感词、举报、自动反垃圾。
 - 无 PostgreSQL / 多实例（仓储层已抽象，后续可替换）。

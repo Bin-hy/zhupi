@@ -11,4 +11,5 @@ var (
 	_ CommentRepo    = (*Store)(nil)
 	_ ProviderRepo   = (*Store)(nil)
 	_ AdminRepo      = (*Store)(nil)
+	_ StatsRepo      = (*Store)(nil)
 )

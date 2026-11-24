@@ -47,6 +47,15 @@ func (s *Server) Handler() http.Handler {
 	// SDK 静态资源（含 ESM 拆分的 chunk）
 	mux.HandleFunc("GET /sdk/v1/{name...}", s.handleSDKFile)
 
+	// 管理后台静态资源（SPA fallback）
+	mux.HandleFunc("GET /admin", s.handleAdminRoot)
+	mux.HandleFunc("GET /admin/{path...}", s.handleAdminSPA)
+
+	// 管理端登录（公开）
+	mux.Handle("GET /api/v1/admin/auth/providers", chain(http.HandlerFunc(s.handleAdminProviders), s.readLimit))
+	mux.Handle("GET /api/v1/admin/auth/github/start", chain(http.HandlerFunc(s.handleAdminGitHubStart), s.readLimit))
+	mux.Handle("GET /api/v1/admin/auth/oidc/{providerID}/start", chain(http.HandlerFunc(s.handleAdminOIDCStart), s.readLimit))
+
 	// 站点公共接口
 	mux.Handle("GET /api/v1/site-config", s.publicSite(s.handleSiteConfig))
 	mux.Handle("GET /api/v1/annotations", s.publicSite(s.handleListAnnotations))
@@ -66,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 账号
 	mux.Handle("GET /api/v1/me", s.account(s.handleMe))
+	mux.Handle("GET /api/v1/me/sites", s.account(s.handleMeSites))
 	mux.Handle("GET /api/v1/me/identities", s.account(s.handleListIdentities))
 	mux.Handle("DELETE /api/v1/me/identities/{id}", s.account(s.handleUnbindIdentity))
 	mux.Handle("GET /api/v1/me/sessions", s.account(s.handleListSessions))
@@ -84,6 +94,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminListAdmins), s.requireAuth, s.requireSuperadmin))
 	mux.Handle("POST /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminAddAdmin), s.requireAuth, s.requireSuperadmin))
 	mux.Handle("DELETE /api/v1/admin/sites/{id}/admins/{userID}", chain(http.HandlerFunc(s.handleAdminRemoveAdmin), s.requireAuth, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/overview", chain(http.HandlerFunc(s.handleAdminOverview), s.requireAuth))
 	mux.Handle("GET /api/v1/admin/users", chain(http.HandlerFunc(s.handleAdminListUsers), s.requireAuth, s.requireSuperadmin))
 	mux.Handle("POST /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalBan), s.requireAuth, s.requireSuperadmin))
 	mux.Handle("DELETE /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalUnban), s.requireAuth, s.requireSuperadmin))
@@ -92,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/queue", s.adminSite(s.handleAdminQueue))
 	mux.Handle("POST /api/v1/admin/sites/{siteID}/annotations/{id}/moderate", s.adminSite(s.handleAdminModerateAnnotation))
 	mux.Handle("POST /api/v1/admin/sites/{siteID}/comments/{id}/moderate", s.adminSite(s.handleAdminModerateComment))
+	mux.Handle("GET /api/v1/admin/sites/{siteID}/bans", s.adminSite(s.handleAdminListBans))
 	mux.Handle("POST /api/v1/admin/sites/{siteID}/bans/{userID}", s.adminSite(s.handleAdminBanUser))
 	mux.Handle("DELETE /api/v1/admin/sites/{siteID}/bans/{userID}", s.adminSite(s.handleAdminUnbanUser))
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/providers", s.adminSite(s.handleAdminListProviders))

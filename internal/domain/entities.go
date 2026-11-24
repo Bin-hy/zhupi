@@ -161,3 +161,25 @@ type Principal struct {
 func (p Principal) CanModerateSite(siteID int64) bool {
 	return p.IsSuperadmin || (p.SiteID == siteID && p.IsSiteAdmin)
 }
+
+// SiteBanView 是管理后台展示的站点封禁信息。
+type SiteBanView struct {
+	UserID    int64     `json:"userId"`
+	Name      string    `json:"name"`
+	AvatarURL string    `json:"avatarUrl"`
+	Reason    string    `json:"reason"`
+	BannedBy  int64     `json:"bannedBy"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// OverviewPending 是概览页的最近待审条目（批注或评论）。
+type OverviewPending struct {
+	ID         int64     `json:"id"`
+	Kind       string    `json:"kind"` // annotation | comment
+	SiteID     int64     `json:"siteId"`
+	SiteName   string    `json:"siteName"`
+	Author     Author    `json:"author"`
+	QuoteExact string    `json:"quoteExact,omitempty"`
+	Content    string    `json:"content,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+}

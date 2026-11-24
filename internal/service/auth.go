@@ -91,6 +91,122 @@ func (a *AuthService) startGitHub(ctx context.Context, site domain.Site, returnT
 	return a.github.AuthCodeURL(state), nil
 }
 
+type AdminProviderView struct {
+	ID       int64  `json:"id"`
+	SiteID   int64  `json:"siteId"`
+	SiteName string `json:"siteName"`
+	Name     string `json:"name"`
+	Issuer   string `json:"issuer"`
+}
+
+type AdminAuthProviders struct {
+	GitHub    bool                `json:"github"`
+	Providers []AdminProviderView `json:"providers"`
+}
+
+func (a *AuthService) AdminProviders(ctx context.Context) (AdminAuthProviders, error) {
+	list, err := a.providers.ListEnabledWithSite(ctx)
+	if err != nil {
+		return AdminAuthProviders{}, err
+	}
+	out := AdminAuthProviders{
+		GitHub:    a.github != nil && a.github.Configured(),
+		Providers: make([]AdminProviderView, 0, len(list)),
+	}
+	for _, item := range list {
+		out.Providers = append(out.Providers, AdminProviderView{
+			ID: item.Provider.ID, SiteID: item.SiteID, SiteName: item.SiteName,
+			Name: item.Provider.Name, Issuer: item.Provider.Issuer,
+		})
+	}
+	return out, nil
+}
+
+func (a *AuthService) StartAdminGitHub(ctx context.Context, returnTo string) (string, error) {
+	if a.github == nil || !a.github.Configured() {
+		return "", domain.NewError("github_not_configured", "服务端未配置 GitHub 登录", 503)
+	}
+	state, hash, err := newState()
+	if err != nil {
+		return "", err
+	}
+	flow := domain.AuthFlow{
+		StateHash:    hash,
+		Mode:         domain.FlowLogin,
+		ProviderType: domain.ProviderGitHub,
+		Issuer:       authpkg.GitHubIssuer,
+		SiteID:       0,
+		ReturnTo:     safeAdminReturnTo(a.cfg.PublicBaseURL, returnTo),
+		ExpiresAt:    a.now().Add(10 * time.Minute),
+	}
+	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
+		return "", err
+	}
+	return a.github.AuthCodeURL(state), nil
+}
+
+func (a *AuthService) StartAdminOIDC(ctx context.Context, providerID int64, returnTo string) (string, error) {
+	provider, err := a.providers.ProviderByIDAny(ctx, providerID)
+	if err != nil {
+		return "", domain.NotFound("登录提供商不存在")
+	}
+	if !provider.Enabled {
+		return "", domain.Forbidden("provider_disabled", "登录提供商已停用")
+	}
+	cfg, _, err := a.oidcConfig(provider)
+	if err != nil {
+		return "", err
+	}
+	state, hash, err := newState()
+	if err != nil {
+		return "", err
+	}
+	verifier, err := randomBase64(32)
+	if err != nil {
+		return "", err
+	}
+	nonce, err := randomHex(16)
+	if err != nil {
+		return "", err
+	}
+	flow := domain.AuthFlow{
+		StateHash:    hash,
+		Mode:         domain.FlowLogin,
+		ProviderType: domain.ProviderOIDC,
+		ProviderID:   provider.ID,
+		Issuer:       authpkg.NormalizeIssuer(provider.Issuer),
+		SiteID:       provider.SiteID,
+		ReturnTo:     safeAdminReturnTo(a.cfg.PublicBaseURL, returnTo),
+		CodeVerifier: verifier,
+		Nonce:        nonce,
+		ExpiresAt:    a.now().Add(10 * time.Minute),
+	}
+	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
+		return "", err
+	}
+	return a.oidc.AuthCodeURL(ctx, cfg, state, nonce, verifier)
+}
+
+func safeAdminReturnTo(publicBaseURL, raw string) string {
+	fallback := strings.TrimRight(publicBaseURL, "/") + "/admin/"
+	base, err := url.Parse(publicBaseURL)
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return fallback
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fallback
+	}
+	if !strings.EqualFold(u.Scheme, base.Scheme) || !strings.EqualFold(u.Host, base.Host) {
+		return fallback
+	}
+	if u.Path != "/admin" && !strings.HasPrefix(u.Path, "/admin/") {
+		return fallback
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
 func (a *AuthService) StartOIDC(ctx context.Context, providerID int64, site domain.Site, returnTo string) (string, error) {
 	return a.startOIDC(ctx, providerID, site, returnTo, domain.FlowLogin, 0)
 }

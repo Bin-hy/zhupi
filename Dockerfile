@@ -8,13 +8,22 @@ RUN npm ci
 COPY sdk/ ./
 RUN npm run build
 
-# 2) 编译 Go 服务，并把 SDK 产物 embed 进去
+# 1.1) 构建管理后台
+FROM node:22-alpine AS admin
+WORKDIR /src/admin
+COPY admin/package.json admin/package-lock.json ./
+RUN npm ci
+COPY admin/ ./
+RUN npm run build
+
+# 2) 编译 Go 服务，并把 SDK / 管理后台产物 embed 进去
 FROM golang:1.27.3-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=sdk /src/sdk/dist ./internal/sdkassets/dist
+COPY --from=admin /src/admin/dist ./internal/adminassets/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
     -o /out/annotation-service ./cmd/annotation-service
 

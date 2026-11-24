@@ -8,4 +8,7 @@ internal/sdkassets/dist/*
 !internal/sdkassets/dist/.gitkeep
 
 node_modules/
-dist/
+/sdk/dist/
+/admin/dist/
+internal/adminassets/dist/*
+!internal/adminassets/dist/.gitkeep

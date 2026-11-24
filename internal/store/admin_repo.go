@@ -81,3 +81,79 @@ func (s *Store) IsBanned(ctx context.Context, siteID, userID int64) (bool, error
 	}
 	return n > 0, nil
 }
+
+func (s *Store) ListAdminSiteIDs(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT site_id FROM site_admins WHERE user_id = ? ORDER BY site_id ASC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListSitesForAdmin(ctx context.Context, userID int64) ([]domain.Site, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.id, s.key, s.name, s.display_name, s.status, s.moderation_mode,
+		       s.theme_color, s.default_locale, s.created_at, s.updated_at
+		FROM sites s JOIN site_admins sa ON sa.site_id = s.id
+		WHERE sa.user_id = ?
+		ORDER BY s.id ASC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.Site, 0)
+	for rows.Next() {
+		site, err := scanSite(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, site)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		origins, err := s.loadOrigins(ctx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Origins = origins
+	}
+	return out, nil
+}
+
+func (s *Store) ListSiteBans(ctx context.Context, siteID int64) ([]domain.SiteBanView, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT b.user_id, u.display_name, u.avatar_url, b.reason, b.banned_by, b.created_at
+		FROM site_bans b JOIN users u ON u.id = b.user_id
+		WHERE b.site_id = ?
+		ORDER BY b.created_at DESC
+		LIMIT 200`, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.SiteBanView, 0)
+	for rows.Next() {
+		var (
+			v       domain.SiteBanView
+			created int64
+		)
+		if err := rows.Scan(&v.UserID, &v.Name, &v.AvatarURL, &v.Reason, &v.BannedBy, &created); err != nil {
+			return nil, err
+		}
+		v.CreatedAt = fromUnix(created)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

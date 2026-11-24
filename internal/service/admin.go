@@ -14,11 +14,97 @@ type AdminService struct {
 	identities store.IdentityRepo
 	admins     store.AdminRepo
 	sessions   store.SessionRepo
+	stats      store.StatsRepo
 }
 
 func NewAdminService(sites store.SiteRepo, users store.UserRepo, identities store.IdentityRepo,
-	admins store.AdminRepo, sessions store.SessionRepo) *AdminService {
-	return &AdminService{sites: sites, users: users, identities: identities, admins: admins, sessions: sessions}
+	admins store.AdminRepo, sessions store.SessionRepo, stats store.StatsRepo) *AdminService {
+	return &AdminService{sites: sites, users: users, identities: identities, admins: admins, sessions: sessions, stats: stats}
+}
+
+type OverviewCounts struct {
+	Sites              int `json:"sites"`
+	Users              int `json:"users"`
+	Annotations        int `json:"annotations"`
+	PendingAnnotations int `json:"pendingAnnotations"`
+	Comments           int `json:"comments"`
+	PendingComments    int `json:"pendingComments"`
+}
+
+type Overview struct {
+	Counts            OverviewCounts           `json:"counts"`
+	Sites             []domain.Site            `json:"sites"`
+	RecentAnnotations []domain.OverviewPending `json:"recentAnnotations"`
+	RecentComments    []domain.OverviewPending `json:"recentComments"`
+}
+
+func (a *AdminService) AccessibleSites(ctx context.Context, p domain.Principal) ([]domain.Site, error) {
+	if p.IsSuperadmin {
+		sites, _, err := a.sites.ListSites(ctx, 0, 200)
+		return sites, err
+	}
+	return a.admins.ListSitesForAdmin(ctx, p.User.ID)
+}
+
+func (a *AdminService) Overview(ctx context.Context, p domain.Principal) (Overview, error) {
+	sites, err := a.AccessibleSites(ctx, p)
+	if err != nil {
+		return Overview{}, err
+	}
+	var siteIDs []int64
+	for _, site := range sites {
+		siteIDs = append(siteIDs, site.ID)
+	}
+
+	var scope []int64
+	if !p.IsSuperadmin {
+		if len(siteIDs) == 0 {
+			return Overview{Sites: sites, RecentAnnotations: []domain.OverviewPending{}, RecentComments: []domain.OverviewPending{}}, nil
+		}
+		scope = siteIDs
+	}
+
+	counts := OverviewCounts{}
+	if p.IsSuperadmin {
+		if counts.Sites, err = a.stats.CountSites(ctx); err != nil {
+			return Overview{}, err
+		}
+		if counts.Users, err = a.stats.CountUsers(ctx); err != nil {
+			return Overview{}, err
+		}
+	} else {
+		counts.Sites = len(sites)
+		if counts.Users, err = a.stats.CountDistinctAuthors(ctx, scope); err != nil {
+			return Overview{}, err
+		}
+	}
+	if counts.Annotations, err = a.stats.CountAnnotations(ctx, scope, ""); err != nil {
+		return Overview{}, err
+	}
+	if counts.PendingAnnotations, err = a.stats.CountAnnotations(ctx, scope, domain.ModerationPending); err != nil {
+		return Overview{}, err
+	}
+	if counts.Comments, err = a.stats.CountComments(ctx, scope, ""); err != nil {
+		return Overview{}, err
+	}
+	if counts.PendingComments, err = a.stats.CountComments(ctx, scope, domain.ModerationPending); err != nil {
+		return Overview{}, err
+	}
+
+	recentAnnotations, err := a.stats.RecentPendingAnnotations(ctx, scope, 10)
+	if err != nil {
+		return Overview{}, err
+	}
+	recentComments, err := a.stats.RecentPendingComments(ctx, scope, 10)
+	if err != nil {
+		return Overview{}, err
+	}
+	return Overview{
+		Counts:            counts,
+		Sites:             sites,
+		RecentAnnotations: recentAnnotations,
+		RecentComments:    recentComments,
+	}, nil
 }
 
 func (a *AdminService) AddSiteAdmin(ctx context.Context, p domain.Principal, siteID, userID int64) error {

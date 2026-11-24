@@ -57,7 +57,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	authSvc := service.NewAuthService(cfg, st, st, st, st, st, box, github, oidc)
 	annotations := service.NewAnnotationService(st, st)
 	moderation := service.NewModerationService(st, st, st, st, st)
-	admin := service.NewAdminService(st, st, st, st, st)
+	admin := service.NewAdminService(st, st, st, st, st, st)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	srv := New(cfg, st, sites, authSvc, annotations, moderation, admin, log)
 	ts := httptest.NewServer(srv.Handler())
@@ -442,5 +442,157 @@ func TestSiteConfigExposesIssuer(t *testing.T) {
 	}
 	if bytes.Contains(body, []byte("cipher")) {
 		t.Fatalf("secret leaked: %s", body)
+	}
+}
+
+func (e *testEnv) loginUser(t *testing.T, name string) (string, int64) {
+	t.Helper()
+	resp, body := e.do(t, http.MethodPost, "/api/v1/auth/dev/login", "", "", "", map[string]any{"name": name})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("dev login %s: %d %s", name, resp.StatusCode, body)
+	}
+	var out struct {
+		Token string `json:"token"`
+		User  struct {
+			ID int64 `json:"id"`
+		} `json:"user"`
+	}
+	_ = json.Unmarshal(body, &out)
+	return out.Token, out.User.ID
+}
+
+func TestAdminConsoleAPIs(t *testing.T) {
+	e := newTestEnv(t)
+	siteA := e.site(t, "a", "http://a.test", domain.ModerationPost)
+	siteB := e.site(t, "b", "http://b.test", domain.ModerationPre)
+	alice, aliceID := e.loginUser(t, "alice")
+	bob, bobID := e.loginUser(t, "bob")
+	charlie, _ := e.loginUser(t, "charlie")
+	_ = e.store.SetUserSuperadmin(context.Background(), aliceID, true)
+	_ = e.store.AddSiteAdmin(context.Background(), domain.SiteAdmin{SiteID: siteB.ID, UserID: bobID, GrantedBy: aliceID})
+
+	// 站点管理员范围
+	resp, body := e.do(t, http.MethodGet, "/api/v1/me/sites", alice, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("alice me/sites: %d %s", resp.StatusCode, body)
+	}
+	var aliceSites struct {
+		Sites []domain.Site `json:"sites"`
+	}
+	_ = json.Unmarshal(body, &aliceSites)
+	if len(aliceSites.Sites) != 2 {
+		t.Fatalf("alice sites = %d", len(aliceSites.Sites))
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/me/sites", bob, "", "", nil)
+	var bobSites struct {
+		Sites []domain.Site `json:"sites"`
+	}
+	_ = json.Unmarshal(body, &bobSites)
+	if len(bobSites.Sites) != 1 || bobSites.Sites[0].ID != siteB.ID {
+		t.Fatalf("bob sites = %+v", bobSites.Sites)
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/me/sites", charlie, "", "", nil)
+	_ = json.Unmarshal(body, &bobSites)
+	if len(bobSites.Sites) != 0 {
+		t.Fatalf("charlie sites = %d", len(bobSites.Sites))
+	}
+
+	// 预置待审内容
+	e.createAnnotation(t, charlie, siteB, "http://b.test", "pending", "p")
+
+	// 概览：超管与站点管理员范围不同
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/overview", alice, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("alice overview: %d %s", resp.StatusCode, body)
+	}
+	var aliceOverview struct {
+		Counts struct {
+			Sites              int `json:"sites"`
+			PendingAnnotations int `json:"pendingAnnotations"`
+		} `json:"counts"`
+	}
+	_ = json.Unmarshal(body, &aliceOverview)
+	if aliceOverview.Counts.Sites != 2 || aliceOverview.Counts.PendingAnnotations < 1 {
+		t.Fatalf("alice overview = %+v", aliceOverview.Counts)
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/overview", bob, "", "", nil)
+	var bobOverview struct {
+		Counts struct {
+			Sites int `json:"sites"`
+		} `json:"counts"`
+	}
+	_ = json.Unmarshal(body, &bobOverview)
+	if bobOverview.Counts.Sites != 1 {
+		t.Fatalf("bob overview = %+v", bobOverview.Counts)
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/overview", charlie, "", "", nil)
+	var charlieOverview struct {
+		Counts struct {
+			Sites int `json:"sites"`
+		} `json:"counts"`
+	}
+	_ = json.Unmarshal(body, &charlieOverview)
+	if charlieOverview.Counts.Sites != 0 {
+		t.Fatalf("charlie overview = %+v", charlieOverview.Counts)
+	}
+
+	// 管理端登录方式：包含启用 OIDC 提供商
+	if _, err := e.store.CreateProvider(context.Background(), domain.OIDCProvider{
+		SiteID: siteA.ID, Name: "SSO", Issuer: "https://sso.test", ClientID: "cid",
+		ClientSecretCipher: []byte("cipher"), Scopes: []string{"openid"}, Enabled: true,
+	}); err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/auth/providers", "", "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin providers: %d %s", resp.StatusCode, body)
+	}
+	var providers struct {
+		GitHub    bool `json:"github"`
+		Providers []struct {
+			SiteName string `json:"siteName"`
+			Issuer   string `json:"issuer"`
+		} `json:"providers"`
+	}
+	_ = json.Unmarshal(body, &providers)
+	if providers.GitHub || len(providers.Providers) != 1 || providers.Providers[0].SiteName != "a" {
+		t.Fatalf("providers = %+v", providers)
+	}
+	if bytes.Contains(body, []byte("cipher")) {
+		t.Fatalf("secret leaked: %s", body)
+	}
+
+	// 站点封禁列表
+	if err := e.store.BanSite(context.Background(), domain.SiteBan{SiteID: siteB.ID, UserID: 3, BannedBy: aliceID, Reason: "spam"}); err != nil {
+		t.Fatalf("ban: %v", err)
+	}
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(siteB.ID)+"/bans", bob, "", "", nil)
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte("spam")) {
+		t.Fatalf("bans: %d %s", resp.StatusCode, body)
+	}
+	resp, _ = e.do(t, http.MethodGet, "/api/v1/admin/sites/"+itoa(siteA.ID)+"/bans", bob, "", "", nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("bob cross-site bans = %d", resp.StatusCode)
+	}
+
+	// 静态入口（不跟随重定向）
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, _ := http.NewRequest(http.MethodGet, e.ts.URL+"/admin", nil)
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatalf("/admin: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/admin/" {
+		t.Fatalf("/admin status = %d location=%q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	resp, adminBody := e.do(t, http.MethodGet, "/admin/", "", "", "", nil)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("/admin/ status = %d", resp.StatusCode)
+	}
+	if resp.StatusCode == http.StatusOK && !bytes.Contains(adminBody, []byte(`id="app"`)) {
+		t.Fatalf("/admin/ did not return app html: %s", adminBody[:min(200, len(adminBody))])
 	}
 }

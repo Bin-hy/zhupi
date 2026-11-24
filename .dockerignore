@@ -10,5 +10,9 @@ README.md
 deploy/
 sdk/node_modules/
 sdk/dist/
+admin/node_modules/
+admin/dist/
 internal/sdkassets/dist/*
 !internal/sdkassets/dist/.gitkeep
+internal/adminassets/dist/*
+!internal/adminassets/dist/.gitkeep

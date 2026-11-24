@@ -84,10 +84,18 @@ type CommentRepo interface {
 	SoftDeleteComment(ctx context.Context, siteID, id int64) error
 }
 
+type ProviderWithSite struct {
+	Provider domain.OIDCProvider
+	SiteID   int64
+	SiteName string
+}
+
 type ProviderRepo interface {
 	CreateProvider(ctx context.Context, p domain.OIDCProvider) (domain.OIDCProvider, error)
 	ProviderByID(ctx context.Context, siteID, id int64) (domain.OIDCProvider, error)
+	ProviderByIDAny(ctx context.Context, id int64) (domain.OIDCProvider, error)
 	ListProvidersBySite(ctx context.Context, siteID int64, onlyEnabled bool) ([]domain.OIDCProvider, error)
+	ListEnabledWithSite(ctx context.Context) ([]ProviderWithSite, error)
 	UpdateProvider(ctx context.Context, p domain.OIDCProvider) error
 	DeleteProvider(ctx context.Context, siteID, id int64) error
 }
@@ -100,4 +108,17 @@ type AdminRepo interface {
 	BanSite(ctx context.Context, b domain.SiteBan) error
 	UnbanSite(ctx context.Context, siteID, userID int64) error
 	IsBanned(ctx context.Context, siteID, userID int64) (bool, error)
+	ListAdminSiteIDs(ctx context.Context, userID int64) ([]int64, error)
+	ListSitesForAdmin(ctx context.Context, userID int64) ([]domain.Site, error)
+	ListSiteBans(ctx context.Context, siteID int64) ([]domain.SiteBanView, error)
+}
+
+type StatsRepo interface {
+	CountSites(ctx context.Context) (int, error)
+	CountUsers(ctx context.Context) (int, error)
+	CountAnnotations(ctx context.Context, siteIDs []int64, moderation domain.ModerationStatus) (int, error)
+	CountComments(ctx context.Context, siteIDs []int64, moderation domain.ModerationStatus) (int, error)
+	CountDistinctAuthors(ctx context.Context, siteIDs []int64) (int, error)
+	RecentPendingAnnotations(ctx context.Context, siteIDs []int64, limit int) ([]domain.OverviewPending, error)
+	RecentPendingComments(ctx context.Context, siteIDs []int64, limit int) ([]domain.OverviewPending, error)
 }

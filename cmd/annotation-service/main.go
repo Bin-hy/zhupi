@@ -76,7 +76,7 @@ func runServe() {
 	authSvc := service.NewAuthService(cfg, st, st, st, st, st, box, github, oidcClient)
 	annotations := service.NewAnnotationService(st, st)
 	moderation := service.NewModerationService(st, st, st, st, st)
-	admin := service.NewAdminService(st, st, st, st, st)
+	admin := service.NewAdminService(st, st, st, st, st, st)
 	srv := httpapi.New(cfg, st, sites, authSvc, annotations, moderation, admin, log)
 
 	httpServer := &http.Server{
@@ -140,7 +140,7 @@ func runAdmin(args []string) {
 	}
 
 	sites := service.NewSiteService(st, true)
-	adminSvc := service.NewAdminService(st, st, st, st, st)
+	adminSvc := service.NewAdminService(st, st, st, st, st, st)
 	super := domain.Principal{User: domain.User{ID: 0, DisplayName: "cli"}, IsSuperadmin: true}
 
 	switch args[0] {

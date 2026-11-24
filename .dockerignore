@@ -1,0 +1,14 @@
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.git
+.specs/
+examples/
+README.md
+deploy/
+sdk/node_modules/
+sdk/dist/
+internal/sdkassets/dist/*
+!internal/sdkassets/dist/.gitkeep

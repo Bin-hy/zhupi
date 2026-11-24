@@ -1,0 +1,11 @@
+*.db
+*.db-wal
+*.db-shm
+/annotation-service
+bin/
+.env
+internal/sdkassets/dist/*
+!internal/sdkassets/dist/.gitkeep
+
+node_modules/
+dist/

@@ -1,0 +1,15 @@
+# 宿主机 Caddy 配置示例
+#
+# 1. 把 annot.example.com 换成你的子域名，并先把 DNS A/AAAA 记录指向服务器；
+# 2. 合并到现有的 Caddyfile 后执行：caddy reload --config /etc/caddy/Caddyfile
+# 3. Caddy 会自动申请并续期 HTTPS 证书。
+
+annot.example.com {
+	encode zstd gzip
+
+	# docker-compose.yml 把服务发布在宿主机 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+		# 服务端会读取 X-Forwarded-For（TRUST_PROXY=1）
+		header_up X-Forwarded-For {remote_host}
+	}
+}

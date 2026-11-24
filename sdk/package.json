@@ -1,0 +1,32 @@
+{
+  "name": "@gocampus/annotation-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/annotation-sdk.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e:plain": "node e2e/plain.mjs",
+    "e2e:vitepress": "node e2e/vitepress.mjs",
+    "e2e:account": "node e2e/account-mobile.mjs",
+    "e2e:relocate": "node e2e/relocate.mjs"
+  },
+  "dependencies": {
+    "@apache-annotator/dom": "^0.2.0",
+    "@apache-annotator/selector": "^0.2.0",
+    "dom-anchor-text-quote": "^4.0.2"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-dts": "^4.3.0",
+    "vitest": "^2.1.4",
+    "playwright-core": "^1.49.0"
+  }
+}

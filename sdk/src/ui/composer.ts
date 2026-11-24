@@ -9,8 +9,10 @@ export class Composer {
   private readonly cancelBtn: HTMLButtonElement
   private readonly titleEl: HTMLElement
   private readonly countEl: HTMLElement
+  private readonly hintEl: HTMLElement
   private publishing = false
   private msg: Messages | null = null
+  private draftKey = ''
 
   constructor(root: ShadowRoot, onSubmit: () => void) {
     this.el = document.createElement('div')
@@ -25,7 +27,7 @@ export class Composer {
       </div>
       <blockquote class="quote"></blockquote>
       <textarea rows="4" maxlength="4000"></textarea>
-      <div class="row count-row"><span class="count"></span></div>
+      <div class="row count-row"><span class="composer-hint"></span><span class="count"></span></div>
       <div class="row end">
         <button class="btn cancel" data-action="cancel" type="button"></button>
         <button class="btn primary publish" data-action="publish" type="button"></button>
@@ -40,8 +42,12 @@ export class Composer {
     this.cancelBtn = this.el.querySelector('.cancel')!
     this.titleEl = this.el.querySelector('.composer-title')!
     this.countEl = this.el.querySelector('.count')!
+    this.hintEl = this.el.querySelector('.composer-hint')!
 
-    this.textarea.addEventListener('input', () => this.updateCount())
+    this.textarea.addEventListener('input', () => {
+      this.updateCount()
+      this.saveDraft()
+    })
     this.textarea.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
         event.preventDefault()
@@ -56,12 +62,17 @@ export class Composer {
     this.textarea.placeholder = msg.composerPlaceholder
     this.cancelBtn.textContent = msg.cancel
     this.publishBtn.textContent = this.publishing ? msg.publishing : msg.publish
+    this.hintEl.textContent = msg.composerHint
+  }
+
+  setDraftKey(key: string): void {
+    this.draftKey = key
   }
 
   open(quote: string, msg: Messages): void {
     this.setMessages(msg)
     this.quoteEl.textContent = quote
-    this.textarea.value = ''
+    this.textarea.value = this.loadDraft()
     this.updateCount()
     this.setError('')
     this.setPending(false)
@@ -72,6 +83,15 @@ export class Composer {
   close(): void {
     this.el.hidden = true
     this.setPending(false)
+  }
+
+  clearDraft(): void {
+    if (!this.draftKey) return
+    try {
+      localStorage.removeItem(this.draftKey)
+    } catch {
+      /* ignore */
+    }
   }
 
   value(): string {
@@ -103,5 +123,25 @@ export class Composer {
   private updateCount(): void {
     this.countEl.textContent = `${this.textarea.value.length}/4000`
     this.publishBtn.disabled = this.publishing || this.textarea.value.trim().length === 0
+  }
+
+  private loadDraft(): string {
+    if (!this.draftKey) return ''
+    try {
+      return localStorage.getItem(this.draftKey) || ''
+    } catch {
+      return ''
+    }
+  }
+
+  private saveDraft(): void {
+    if (!this.draftKey) return
+    try {
+      const value = this.textarea.value
+      if (value) localStorage.setItem(this.draftKey, value)
+      else localStorage.removeItem(this.draftKey)
+    } catch {
+      /* ignore */
+    }
   }
 }

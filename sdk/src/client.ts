@@ -20,6 +20,22 @@ export type CreateAnnotationInput = {
   content: string
 }
 
+export type AnnotationSort = 'position' | 'newest'
+
+export type AnnotationCounts = {
+  all: number
+  mine: number
+  resolved: number
+  pending: number
+}
+
+export type AnnotationListResult = {
+  annotations: Annotation[]
+  nextCursor: number
+  total: number
+  counts: AnnotationCounts
+}
+
 export class AnnotationClient {
   readonly base: string
   readonly siteKey: string
@@ -104,9 +120,10 @@ export class AnnotationClient {
     filter: Filter = 'all',
     cursor = 0,
     limit = 50,
-  ): Promise<{ annotations: Annotation[]; nextCursor: number; total: number }> {
+    sort: AnnotationSort = 'position',
+  ): Promise<AnnotationListResult> {
     return this.request(
-      `/api/v1/annotations?page=${encodeURIComponent(pageKey)}&filter=${filter}&cursor=${cursor}&limit=${limit}`,
+      `/api/v1/annotations?page=${encodeURIComponent(pageKey)}&filter=${filter}&sort=${sort}&cursor=${cursor}&limit=${limit}`,
     )
   }
 

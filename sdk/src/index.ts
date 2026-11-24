@@ -5,12 +5,17 @@ import { AnnotationUI } from './ui/ui'
 import type { ConfirmOptions } from './ui/confirm'
 import {
   appendAnnotations,
+  appendComment,
   initialState,
+  lastActivityAt,
   mergeState,
   removeAnnotation,
+  searchAnnotations,
+  sortForDisplay,
   upsertAnnotation,
   type Filter,
   type SDKState,
+  type SortMode,
   type ThemeMode,
 } from './state'
 import { messages, normalizeLocale } from './i18n'
@@ -96,6 +101,8 @@ export class AnnotationInstance {
     this.state = mergeState(initialState(), {
       theme,
       locale: options.locale || 'zh-CN',
+      sort: loadSortPreference(this.apiBase, options.siteKey),
+      lastSeenAt: this.readLastSeen(),
     })
 
     this.ui = new AnnotationUI(
@@ -108,15 +115,20 @@ export class AnnotationInstance {
         onLogout: () => void this.logout(),
         onSubmit: (text) => void this.submitAnnotation(text),
         onCancelComposer: () => this.cancelComposer(),
-        onReply: (id, text) => void this.reply(id, text),
+        onReply: (id, text) => this.reply(id, text),
         onResolve: (a) => void this.resolve(a),
         onDelete: (a) => void this.remove(a),
         onDeleteComment: (id) => void this.removeComment(id),
         onFocus: (id) => this.focus(id),
         onCopyLink: (id) => void this.copyLink(id),
+        onCopyQuoteText: (id) => void this.copyQuoteText(id),
         onRelocate: (id) => this.startRelocate(id),
         onCancelRelocate: () => this.cancelRelocate(),
         onFilterChange: (filter) => void this.changeFilter(filter),
+        onSearchChange: (query) => this.changeSearch(query),
+        onSortChange: (sort) => void this.changeSort(sort),
+        onPrev: () => this.navigate(-1),
+        onNext: () => this.navigate(1),
         onLoadMore: () => void this.loadMore(),
         onRetry: () => void this.loadList(true),
         onToggleDrawer: (open) => this.toggleDrawer(open),
@@ -130,6 +142,7 @@ export class AnnotationInstance {
       },
       { locale: this.state.locale, theme, devLogin: !!options.devLogin, cssVariables: options.cssVariables },
     )
+    this.ui.setComposerDraftKey(this.draftKey())
     this.ui.setTheme(theme, resolveTheme(theme))
     this.stopThemeWatch = watchSystemTheme(() => {
       if (this.state.theme === 'auto') this.ui.setTheme('auto', systemTheme())
@@ -178,6 +191,8 @@ export class AnnotationInstance {
   async setPage(page: { pageKey?: string; pageTitle?: string }): Promise<void> {
     this.pageKey = normalizePageKey(page.pageKey ?? location.pathname)
     this.pageTitle = page.pageTitle ?? document.title
+    this.state = mergeState(this.state, { lastSeenAt: this.readLastSeen(), unreadIds: new Set() })
+    this.ui.setComposerDraftKey(this.draftKey())
     this.savedRange = null
     this.selectedQuote = ''
     this.ui.closeComposer()
@@ -292,6 +307,7 @@ export class AnnotationInstance {
         this.state.filter,
         reset ? 0 : this.state.nextCursor,
         limit,
+        this.state.sort,
       )
       if (seq !== this.loadSeq) return
       const annotations = reset
@@ -300,6 +316,8 @@ export class AnnotationInstance {
       this.state = mergeState(this.state, {
         annotations,
         total: result.total,
+        counts: result.counts ?? this.state.counts,
+        unreadIds: reset ? this.computeUnread(annotations) : this.state.unreadIds,
         nextCursor: result.nextCursor,
         loading: false,
         loadingMore: false,
@@ -339,6 +357,31 @@ export class AnnotationInstance {
     this.state = mergeState(this.state, { filter })
     this.commitState()
     await this.loadList(true)
+  }
+
+  private changeSearch(query: string): void {
+    this.state = mergeState(this.state, { search: query, activeId: null })
+    this.commitState()
+  }
+
+  private async changeSort(sort: SortMode): Promise<void> {
+    if (sort === this.state.sort) return
+    this.state = mergeState(this.state, { sort })
+    saveSortPreference(this.apiBase, this.options.siteKey, sort)
+    await this.loadList(true)
+  }
+
+  private navigate(delta: number): void {
+    const list = searchAnnotations(sortForDisplay(this.state.annotations, this.state.sort), this.state.search)
+    if (list.length === 0) return
+    const current = list.findIndex((a) => a.id === this.state.activeId)
+    const next =
+      current < 0
+        ? delta > 0
+          ? 0
+          : list.length - 1
+        : (current + delta + list.length) % list.length
+    this.focus(list[next].id)
   }
 
   private async loadMore(): Promise<void> {
@@ -495,6 +538,7 @@ export class AnnotationInstance {
         anchor,
         content: text,
       })
+      this.ui.clearComposerDraft()
       this.cancelComposer()
       await this.loadList(true, Math.min(200, Math.max(PAGE_SIZE, this.state.annotations.length)))
       this.ui.openDrawer()
@@ -514,14 +558,19 @@ export class AnnotationInstance {
 
   // ---- item actions ----
 
-  private async reply(id: number, text: string): Promise<void> {
+  private async reply(id: number, text: string): Promise<boolean> {
     const msg = messages(this.state.locale)
     try {
-      await this.client.addComment(id, text)
-      await this.loadList(true, Math.min(200, Math.max(PAGE_SIZE, this.state.annotations.length)))
+      const comment = await this.client.addComment(id, text)
+      this.state = mergeState(this.state, {
+        annotations: appendComment(this.state.annotations, id, comment),
+      })
+      this.commitState()
       this.ui.toast(msg.replySuccess)
+      return true
     } catch (err) {
       this.handleError(err)
+      return false
     }
   }
 
@@ -608,6 +657,14 @@ export class AnnotationInstance {
     this.ui.toast(ok ? msg.copied : `${msg.copyFailed}\n${link}`, ok ? 'success' : 'error')
   }
 
+  private async copyQuoteText(id: number): Promise<void> {
+    const msg = messages(this.state.locale)
+    const annotation = this.state.annotations.find((a) => a.id === id)
+    if (!annotation) return
+    const ok = await copyText(annotation.quoteExact)
+    this.ui.toast(ok ? msg.copied : msg.copyFailed, ok ? 'success' : 'error')
+  }
+
   // ---- relocate ----
 
   private startRelocate(id: number): void {
@@ -654,6 +711,7 @@ export class AnnotationInstance {
   // ---- account ----
 
   private toggleDrawer(open: boolean): void {
+    if (open) this.markSeen()
     this.state = mergeState(this.state, {
       drawerOpen: open,
       accountOpen: open ? this.state.accountOpen || !this.state.user : false,
@@ -796,6 +854,46 @@ export class AnnotationInstance {
     }
   }
 
+  private markSeen(): void {
+    const now = Date.now()
+    this.state = mergeState(this.state, { lastSeenAt: now, unreadIds: new Set() })
+    try {
+      localStorage.setItem(this.seenKey(), String(now))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private computeUnread(list: Annotation[]): Set<number> {
+    const seen = this.state.lastSeenAt
+    const out = new Set<number>()
+    if (!seen) return out
+    const self = this.state.user?.id
+    for (const a of list) {
+      if (a.author.id === self) continue
+      if (lastActivityAt(a) > seen) out.add(a.id)
+    }
+    return out
+  }
+
+  private seenKey(): string {
+    return `zhupi:seen:${this.apiBase}:${this.options.siteKey}:${this.pageKey}`
+  }
+
+  private readLastSeen(): number {
+    try {
+      const raw = localStorage.getItem(this.seenKey())
+      const value = raw ? Number(raw) : 0
+      return Number.isFinite(value) && value > 0 ? value : Date.now()
+    } catch {
+      return Date.now()
+    }
+  }
+
+  private draftKey(): string {
+    return `zhupi:draft:${this.apiBase}:${this.options.siteKey}:${this.pageKey}`
+  }
+
   private commitState(): void {
     this.ui.setState(this.state)
     this.emitter.emit('statechange', {
@@ -883,6 +981,26 @@ function normalizePageKey(raw: string): string {
     return decodeURI(raw)
   } catch {
     return raw
+  }
+}
+
+function sortKey(apiBase: string, siteKey: string): string {
+  return `zhupi:sort:${apiBase}:${siteKey}`
+}
+
+function loadSortPreference(apiBase: string, siteKey: string): SortMode {
+  try {
+    return localStorage.getItem(sortKey(apiBase, siteKey)) === 'newest' ? 'newest' : 'position'
+  } catch {
+    return 'position'
+  }
+}
+
+function saveSortPreference(apiBase: string, siteKey: string, sort: SortMode): void {
+  try {
+    localStorage.setItem(sortKey(apiBase, siteKey), sort)
+  } catch {
+    /* ignore */
   }
 }
 

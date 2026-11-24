@@ -90,6 +90,18 @@ textarea:focus-visible,
   box-shadow: 0 6px 20px rgba(8, 127, 91, 0.18);
 }
 
+.fab[data-unread='1']::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--annot-bg);
+  border-radius: 50%;
+  background: var(--annot-danger);
+}
+
 .fab .count {
   min-width: 20px;
   height: 20px;
@@ -171,7 +183,7 @@ textarea:focus-visible,
 }
 
 .composer textarea,
-.reply input {
+.reply textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--annot-border);
@@ -194,6 +206,8 @@ textarea:focus-visible,
   line-height: 1.6;
   overflow-wrap: anywhere;
   cursor: pointer;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .drawer {
@@ -206,19 +220,81 @@ textarea:focus-visible,
   width: min(400px, 100vw);
   height: calc(100vh - var(--annotation-drawer-top, 0px));
   padding: 14px 16px 24px;
-  overflow-y: auto;
+  overflow: hidden;
   border-left: 1px solid var(--annot-border);
   background: var(--annot-bg);
   color: var(--annot-fg);
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.12);
 }
 
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
 .drawer header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--annot-border);
+}
+
+.drawer-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.drawer-nav .icon-btn {
+  margin-left: 0;
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+}
+
+.nav-pos {
+  min-width: 30px;
+  color: var(--annot-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.drawer-tools {
+  flex-shrink: 0;
+  padding-top: 10px;
+}
+
+.search-row {
+  display: flex;
+  gap: 6px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--annot-border);
+  border-radius: 8px;
+  background: var(--annot-soft);
+  color: var(--annot-fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sort-select {
+  height: 34px;
+  padding: 0 6px;
+  border: 1px solid var(--annot-border);
+  border-radius: 8px;
+  background: var(--annot-soft);
+  color: var(--annot-fg);
+  font: inherit;
+  font-size: 12px;
 }
 
 .pill {
@@ -260,6 +336,10 @@ textarea:focus-visible,
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   flex: 1;
   min-height: 34px;
   padding: 4px 8px;
@@ -268,6 +348,22 @@ textarea:focus-visible,
   background: transparent;
   color: var(--annot-muted);
   font-size: 12px;
+}
+
+.tab-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--annot-muted) 14%, transparent);
+  color: var(--annot-muted);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.tab.active .tab-count {
+  background: color-mix(in srgb, var(--annot-accent) 16%, transparent);
+  color: var(--annot-accent);
 }
 
 .tab.active {
@@ -461,16 +557,80 @@ textarea:focus-visible,
   color: var(--annot-danger);
 }
 
+.badge.new {
+  background: color-mix(in srgb, var(--annot-accent) 18%, transparent);
+  color: var(--annot-accent);
+  font-weight: 600;
+}
+
 .comment {
   margin-top: 8px;
 }
 
-.comment p {
-  margin: 2px 0 0;
+.comment + .comment {
+  padding-top: 8px;
+  border-top: 1px dashed var(--annot-border);
+}
+
+.comment-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comment-head .avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+}
+
+.comment-tools {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.comment-tools .btn.link {
+  font-size: 11px;
+}
+
+.comment-body {
+  margin: 3px 0 0 26px;
   font-size: 13px;
   line-height: 1.65;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.comment-body code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--annot-fg) 8%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.comment-body a {
+  color: var(--annot-accent);
+  text-decoration: underline;
+}
+
+.comment-body del {
+  opacity: 0.7;
+}
+
+.empty-state {
+  padding: 28px 8px;
+  color: var(--annot-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0 0 6px;
+}
+
+.empty-state .btn {
+  margin-top: 8px;
 }
 
 .actions {
@@ -552,15 +712,25 @@ textarea:focus-visible,
 
 .reply {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   margin-top: 10px;
 }
 
-.reply input {
+.reply textarea {
   flex: 1;
   min-width: 0;
+  min-height: 36px;
+  max-height: 120px;
   padding: 6px 10px;
   font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+}
+
+.composer-hint {
+  color: var(--annot-muted);
+  font-size: 11px;
 }
 
 .confirm-overlay {
@@ -645,7 +815,7 @@ textarea:focus-visible,
   .tab,
   .seg,
   .icon-btn,
-  .reply input {
+  .reply textarea {
     min-height: 44px;
   }
 }

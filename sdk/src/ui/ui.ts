@@ -1,7 +1,7 @@
 import type { Messages } from '../i18n'
 import { messages } from '../i18n'
 import type { Annotation } from '../events'
-import type { Filter, SDKState, ThemeMode } from '../state'
+import type { Filter, SDKState, SortMode, ThemeMode } from '../state'
 import { Composer } from './composer'
 import { ConfirmDialog, type ConfirmOptions } from './confirm'
 import { Drawer } from './drawer'
@@ -18,15 +18,20 @@ export type UIHandlers = {
   onLogout: () => void
   onSubmit: (text: string) => void
   onCancelComposer: () => void
-  onReply: (id: number, text: string) => void
+  onReply: (id: number, text: string) => Promise<boolean> | boolean | void
   onResolve: (annotation: Annotation) => void
   onDelete: (annotation: Annotation) => void
   onDeleteComment: (id: number) => void
   onFocus: (id: number) => void
   onCopyLink: (id: number) => void
+  onCopyQuoteText: (id: number) => void
   onRelocate: (id: number) => void
   onCancelRelocate: () => void
   onFilterChange: (filter: Filter) => void
+  onSearchChange: (query: string) => void
+  onSortChange: (sort: SortMode) => void
+  onPrev: () => void
+  onNext: () => void
   onLoadMore: () => void
   onRetry: () => void
   onToggleDrawer: (open: boolean) => void
@@ -98,11 +103,14 @@ export class AnnotationUI {
     this.composerTrap = new FocusTrap(this.composer.el, () => this.handlers.onCancelComposer())
 
     this.host.root.addEventListener('click', (event) => this.onClick(event))
+    this.drawer.el.addEventListener('input', (event) => this.onDrawerInput(event))
+    this.drawer.el.addEventListener('change', (event) => this.onDrawerChange(event))
     this.host.root.addEventListener('keydown', (event) => {
       const key = (event as KeyboardEvent).key
       if (key === 'Escape' && this.toolbar.isVisible()) {
         this.toolbar.hide()
       }
+      this.onShortcut(event as KeyboardEvent)
     })
 
     this.updateLabels()
@@ -116,6 +124,7 @@ export class AnnotationUI {
     this.state = state
     this.fabCount.textContent = state.annotations.length ? String(state.annotations.length) : ''
     this.fabCount.hidden = state.annotations.length === 0
+    this.fab.dataset.unread = !state.drawerOpen && state.unreadIds.size > 0 ? '1' : '0'
     this.drawer.setVisible(state.drawerOpen)
     if (state.drawerOpen) {
       if (!this.drawerTrapActive) {
@@ -176,6 +185,14 @@ export class AnnotationUI {
 
   setComposerError(message: string): void {
     this.composer.setError(message)
+  }
+
+  setComposerDraftKey(key: string): void {
+    this.composer.setDraftKey(key)
+  }
+
+  clearComposerDraft(): void {
+    this.composer.clearDraft()
   }
 
   isComposerOpen(): boolean {
@@ -280,6 +297,7 @@ export class AnnotationUI {
       ['locale', active.dataset.locale],
       ['provider', active.dataset.provider],
       ['reply', active.dataset.reply],
+      ['role', active.dataset.role],
     ]
     const parts = keys
       .filter(([, value]) => value)
@@ -337,9 +355,30 @@ export class AnnotationUI {
         this.handlers.onRetry()
         break
       case 'reply': {
-        const input = this.drawer.query<HTMLInputElement>(`input[data-reply="${id}"]`)
+        const input = this.drawer.query<HTMLTextAreaElement>(`textarea[data-reply="${id}"]`)
         const text = input?.value.trim() || ''
-        if (text) this.handlers.onReply(id, text)
+        if (!input || !text) break
+        const button = target as HTMLButtonElement
+        const original = button.textContent || ''
+        button.disabled = true
+        button.textContent = this.msg.replying
+        input.disabled = true
+        void Promise.resolve(this.handlers.onReply(id, text))
+          .then((ok) => {
+            if (ok === false) this.resetReply(input, button, original)
+          })
+          .catch(() => this.resetReply(input, button, original))
+        break
+      }
+      case 'reply-to': {
+        const input = this.drawer.query<HTMLTextAreaElement>(`textarea[data-reply="${id}"]`)
+        if (!input) break
+        const name = target.dataset.name || ''
+        const prefix = name ? `@${name} ` : ''
+        if (!input.value.startsWith(prefix)) input.value = prefix + input.value
+        this.resizeReply(input)
+        input.focus()
+        input.setSelectionRange(input.value.length, input.value.length)
         break
       }
       case 'resolve':
@@ -356,6 +395,18 @@ export class AnnotationUI {
         break
       case 'copy-link':
         this.handlers.onCopyLink(id)
+        break
+      case 'copy-quote-text':
+        this.handlers.onCopyQuoteText(id)
+        break
+      case 'prev-annotation':
+        this.handlers.onPrev()
+        break
+      case 'next-annotation':
+        this.handlers.onNext()
+        break
+      case 'clear-search':
+        this.handlers.onSearchChange('')
         break
       case 'relocate':
         this.handlers.onRelocate(id)
@@ -396,6 +447,57 @@ export class AnnotationUI {
   private withAnnotation(id: number, callback: (annotation: Annotation) => void): void {
     const annotation = this.state?.annotations.find((a) => a.id === id)
     if (annotation) callback(annotation)
+  }
+
+  private resetReply(input: HTMLTextAreaElement, button: HTMLButtonElement, label: string): void {
+    button.disabled = false
+    button.textContent = label
+    input.disabled = false
+    input.focus()
+  }
+
+  private onDrawerInput(event: Event): void {
+    const target = event.target as HTMLElement
+    if (target instanceof HTMLTextAreaElement && target.dataset.reply) {
+      this.resizeReply(target)
+      return
+    }
+    if (target instanceof HTMLInputElement && target.dataset.role === 'search') {
+      this.handlers.onSearchChange(target.value)
+    }
+  }
+
+  private onDrawerChange(event: Event): void {
+    const target = event.target as HTMLElement
+    if (target instanceof HTMLSelectElement && target.dataset.role === 'sort') {
+      this.handlers.onSortChange(target.value as SortMode)
+    }
+  }
+
+  private resizeReply(input: HTMLTextAreaElement): void {
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`
+  }
+
+  private onShortcut(event: KeyboardEvent): void {
+    if (!this.state?.drawerOpen || this.state.accountOpen) return
+    const el = event.target as HTMLElement | null
+    const typing =
+      !!el &&
+      (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+    if (event.key === '/' && !typing) {
+      event.preventDefault()
+      this.drawer.focusSearch()
+      return
+    }
+    if (typing) return
+    if (event.key === 'j') {
+      event.preventDefault()
+      this.handlers.onNext()
+    } else if (event.key === 'k') {
+      event.preventDefault()
+      this.handlers.onPrev()
+    }
   }
 }
 

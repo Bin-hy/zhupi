@@ -39,6 +39,11 @@ USER 10001:10001
 WORKDIR /app
 COPY --from=build /out/zhupi /app/zhupi
 
+LABEL org.opencontainers.image.title="zhupi" \
+      org.opencontainers.image.description="多站点、可嵌入的划线批注服务" \
+      org.opencontainers.image.source="https://github.com/Bin-hy/zhupi" \
+      org.opencontainers.image.licenses="MIT"
+
 ENV ADDR=:8080 \
     DB_PATH=/data/zhupi.db
 

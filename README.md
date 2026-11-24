@@ -184,14 +184,36 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 
 ## 部署
 
-Docker（多阶段：Node 构建 SDK → Go embed → Alpine）：
+### 方式 A：直接使用已发布镜像
+
+镜像发布在 GitHub Container Registry，`main` 推送构建 `edge`，tag 推送构建版本号与 `latest`
+（`linux/amd64` + `linux/arm64`）：
 
 ```bash
 cp .env.example .env
 # 修改 PUBLIC_BASE_URL / SECRET_KEY / GITHUB_* 等
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f zhupi
 ```
+
+可用 tag：`latest`（最新 release）、`0.2` / `0.2.0`（具体版本）、`edge`（main 最新构建）。
+
+GHCR 包默认是 private。首次使用需在仓库的 Packages 设置里把 `zhupi` 改为 public；
+若保持 private，先登录再拉取：
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <你的 GitHub 用户名> --password-stdin
+```
+
+### 方式 B：从源码本地构建
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Dockerfile 是多阶段的：Node 构建 SDK 与管理后台 → Go embed → Alpine 运行时。
 
 服务只监听宿主机 `127.0.0.1:8080`，由 Caddy/Nginx 提供 HTTPS：
 

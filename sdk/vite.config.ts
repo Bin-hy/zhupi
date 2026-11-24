@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url)
 const optimalSelectEntry = require.resolve('optimal-select/lib/index.js')
 
 export default defineConfig({
-  plugins: [dts({ insertTypesEntry: true, include: ['src'] })],
+  plugins: [dts({ insertTypesEntry: true, include: ['src'], exclude: ['**/*.test.ts'] })],
   resolve: {
     alias: {
       'optimal-select': optimalSelectEntry,
@@ -15,7 +15,7 @@ export default defineConfig({
   },
   build: {
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'ZhupiSDK',

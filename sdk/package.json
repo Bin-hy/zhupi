@@ -1,9 +1,40 @@
 {
   "name": "zhupi-sdk",
   "version": "0.1.0",
+  "description": "可嵌入的划线批注 SDK（朱批 zhupi）",
+  "keywords": [
+    "annotation",
+    "highlight",
+    "comments",
+    "web-annotation",
+    "sdk",
+    "zhupi"
+  ],
+  "license": "MIT",
+  "author": "Bin-hy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bin-hy/zhupi.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/Bin-hy/zhupi/tree/main/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Bin-hy/zhupi/issues"
+  },
   "type": "module",
-  "main": "dist/zhupi.esm.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/zhupi.esm.js",
+  "module": "./dist/zhupi.esm.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/zhupi.esm.js",
+      "default": "./dist/zhupi.esm.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "unpkg": "./dist/zhupi.js",
+  "jsdelivr": "./dist/zhupi.js",
   "files": [
     "dist"
   ],
@@ -11,22 +42,21 @@
     "build": "vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify-package.mjs",
     "e2e:plain": "node e2e/plain.mjs",
     "e2e:vitepress": "node e2e/vitepress.mjs",
     "e2e:account": "node e2e/account-mobile.mjs",
     "e2e:relocate": "node e2e/relocate.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "@apache-annotator/dom": "^0.2.0",
     "@apache-annotator/selector": "^0.2.0",
-    "dom-anchor-text-quote": "^4.0.2"
-  },
-  "devDependencies": {
+    "dom-anchor-text-quote": "^4.0.2",
     "jsdom": "^25.0.1",
+    "playwright-core": "^1.49.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vite-plugin-dts": "^4.3.0",
-    "vitest": "^2.1.4",
-    "playwright-core": "^1.49.0"
+    "vitest": "^2.1.4"
   }
 }

@@ -23,6 +23,22 @@ import {
   watchSystemTheme,
 } from './theme'
 
+export type {
+  Annotation,
+  AnnotationComment,
+  User,
+  Author,
+  QuoteSelector,
+  Anchor,
+  AuthProvider,
+  SiteConfig,
+  Identity,
+  SessionView,
+  EventMap,
+} from './events'
+export type { CreateAnnotationInput } from './client'
+export type { ThemeMode } from './state'
+
 export type InitOptions = {
   siteKey: string
   pageKey?: string

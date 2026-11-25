@@ -8,10 +8,14 @@ hero:
     file: ../../assets/logo.svg
     alt: 朱批 zhupi
   actions:
+    - text: 在线体验
+      link: /playground/
+      icon: comment
+      variant: primary
     - text: 快速开始
       link: /getting-started/quick-start/
       icon: rocket
-      variant: primary
+      variant: minimal
     - text: 接入 SDK
       link: /sdk/integration/
       icon: code-branch
@@ -23,6 +27,10 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## 从这里开始
 
 <CardGrid stagger>
+	<Card title="在线体验" icon="comment">
+		不用部署，直接在测试页选中文字、GitHub 登录并发布第一条批注。
+		[打开测试页 →](/playground/)
+	</Card>
 	<Card title="5 分钟跑起来" icon="rocket">
 		Docker Compose 拉起服务，创建站点，拿到 siteKey，打开示例页面完成第一条批注。
 		[快速开始 →](/getting-started/quick-start/)

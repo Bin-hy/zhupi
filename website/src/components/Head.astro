@@ -1,0 +1,74 @@
+---
+import StarlightHead from '@astrojs/starlight/components/Head.astro';
+
+const sdkUrl =
+	import.meta.env.PUBLIC_ZHUPI_SDK_URL || 'https://zhupi.gataccay.com/sdk/v1/zhupi.js';
+const apiBase =
+	import.meta.env.PUBLIC_ZHUPI_API_BASE || 'https://zhupi.gataccay.com';
+// siteKey 只从构建环境读取，不提交到仓库；缺失时不注入批注 SDK。
+const siteKey = import.meta.env.PUBLIC_ZHUPI_SITE_KEY;
+const annotationEnabled = Boolean(siteKey);
+
+const annotationConfig = { apiBase, siteKey };
+---
+
+<StarlightHead {...Astro.props} />
+
+{annotationEnabled && (
+	<>
+		<script is:inline src={sdkUrl} defer></script>
+		<script is:inline define:vars={{ annotationConfig }}>
+			(() => {
+				const boot = () => {
+					if (!window.ZhupiSDK) {
+						console.warn('[zhupi] SDK 未加载，跳过批注初始化');
+						return;
+					}
+
+					const root =
+						document.querySelector('.sl-markdown-content') ||
+						document.querySelector('main') ||
+						document.body;
+					if (!root) return;
+
+					const resolvedTheme = () =>
+						document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+
+					try {
+						const instance = window.ZhupiSDK.init({
+							siteKey: annotationConfig.siteKey,
+							apiBase: annotationConfig.apiBase,
+							selectRoot: root,
+							pageKey: location.pathname,
+							pageTitle: document.title,
+							theme: resolvedTheme(),
+							cssVariables: {
+								'--annotation-drawer-top':
+									'calc(var(--sl-nav-height) + var(--sl-mobile-toc-height, 0px))',
+							},
+						});
+
+						let lastTheme = resolvedTheme();
+						new MutationObserver(() => {
+							const theme = resolvedTheme();
+							if (theme === lastTheme) return;
+							lastTheme = theme;
+							instance.setTheme(theme);
+						}).observe(document.documentElement, {
+							attributes: true,
+							attributeFilter: ['data-theme'],
+						});
+					} catch (error) {
+						console.warn('[zhupi] 批注初始化失败', error);
+					}
+				};
+
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', boot, { once: true });
+				} else {
+					boot();
+				}
+			})();
+		</script>
+	</>
+)}

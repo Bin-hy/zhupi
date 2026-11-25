@@ -38,10 +38,14 @@ export default defineConfig({
 			},
 			lastUpdated: true,
 			customCss: ['./src/styles/custom.css'],
+			components: {
+				Head: './src/components/Head.astro',
+			},
 			head: [
 				{ tag: 'meta', attrs: { name: 'theme-color', content: '#c92a2a' } },
 			],
 			sidebar: [
+				{ label: '在线体验', slug: 'playground' },
 				{
 					label: '开始使用',
 					items: [

@@ -19,6 +19,7 @@ import LoadMore from '../components/LoadMore.vue'
 import SiteSelector from '../components/SiteSelector.vue'
 import StatusTag from '../components/StatusTag.vue'
 import { formatTime } from '../utils/format'
+import { buildPageLink } from '../utils/page'
 
 type Status = 'pending' | 'approved' | 'rejected'
 type TypeFilter = 'all' | 'annotation' | 'comment'
@@ -208,10 +209,7 @@ function replyCount(raw: RowLike): number {
 
 function pageLink(raw: RowLike): string {
   const row = raw as AnnotationBrief
-  const origin = currentSite.value?.origins.find((item) => /^https?:\/\//i.test(item))
-  if (!origin || !row.pageKey) return ''
-  const path = row.pageKey.startsWith('/') ? row.pageKey : `/${row.pageKey}`
-  return origin.replace(/\/+$/, '') + encodeURI(path)
+  return buildPageLink(row.pageKey, currentSite.value?.origins || [])
 }
 
 function commentPageLink(raw: RowLike): string {

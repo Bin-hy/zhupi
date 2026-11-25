@@ -286,8 +286,28 @@ func TestAdminQueueCommentContextCountsAndSearch(t *testing.T) {
 	if queue.Comments[0].Parent.ID != a.ID || queue.Comments[0].Parent.QuoteExact != "被引用的原文" || queue.Comments[0].Parent.PageKey != "/doc" || queue.Comments[0].Parent.Body != "批注正文" {
 		t.Fatalf("unexpected parent: %+v", queue.Comments[0].Parent)
 	}
-	if queue.Counts.Annotations.Approved != 1 || queue.Counts.Comments.Pending != 1 {
+	if queue.Counts.Annotations.Approved != 1 || queue.Counts.Comments.Pending != 1 || queue.Counts.Comments.Approved != 0 {
 		t.Fatalf("unexpected counts: %+v", queue.Counts)
+	}
+
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/overview", alice, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("overview: %d %s", resp.StatusCode, body)
+	}
+	var overview struct {
+		Counts struct {
+			Annotations        int `json:"annotations"`
+			PendingAnnotations int `json:"pendingAnnotations"`
+			Comments           int `json:"comments"`
+			PendingComments    int `json:"pendingComments"`
+		} `json:"counts"`
+	}
+	if err := json.Unmarshal(body, &overview); err != nil {
+		t.Fatalf("decode overview: %v", err)
+	}
+	if overview.Counts.Annotations != 1 || overview.Counts.PendingAnnotations != 0 ||
+		overview.Counts.Comments != 1 || overview.Counts.PendingComments != 1 {
+		t.Fatalf("overview should exclude annotation body from comment counts: %+v", overview.Counts)
 	}
 
 	if got := get("&q=" + url.QueryEscape("不存在的词")); len(got.Comments) != 0 || len(got.Annotations) != 0 {

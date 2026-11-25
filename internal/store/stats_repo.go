@@ -56,7 +56,7 @@ func (s *Store) CountAnnotations(ctx context.Context, siteIDs []int64, moderatio
 
 func (s *Store) CountComments(ctx context.Context, siteIDs []int64, moderation domain.ModerationStatus) (int, error) {
 	cond, args := siteCondition("site_id", siteIDs)
-	query := `SELECT COUNT(*) FROM comments WHERE visibility <> 'deleted'` + cond
+	query := `SELECT COUNT(*) FROM comments WHERE visibility <> 'deleted' AND is_initial = 0` + cond
 	if moderation != "" {
 		query += ` AND moderation = ?`
 		args = append(args, moderation)
@@ -76,7 +76,7 @@ func (s *Store) CountDistinctAuthors(ctx context.Context, siteIDs []int64) (int,
 			WHERE visibility <> 'deleted'` + annCond + `
 			UNION
 			SELECT user_id AS uid FROM comments
-			WHERE visibility <> 'deleted'` + comCond + `
+			WHERE visibility <> 'deleted' AND is_initial = 0` + comCond + `
 		)`
 	var n int
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(&n)
@@ -135,7 +135,7 @@ func (s *Store) RecentPendingComments(ctx context.Context, siteIDs []int64, limi
 		FROM comments c
 		JOIN users u ON u.id = c.user_id
 		JOIN sites s ON s.id = c.site_id
-		WHERE c.moderation = 'pending' AND c.visibility <> 'deleted'`+cond+`
+		WHERE c.moderation = 'pending' AND c.visibility <> 'deleted' AND c.is_initial = 0`+cond+`
 		ORDER BY c.created_at DESC
 		LIMIT ?`, args...)
 	if err != nil {

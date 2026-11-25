@@ -89,7 +89,7 @@ func (s *Store) ListCommentsForModeration(ctx context.Context, siteID int64, sta
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	conds := []string{"c.site_id = ?", "c.moderation = ?", "c.visibility <> 'deleted'", "c.id > ?"}
+	conds := []string{"c.site_id = ?", "c.moderation = ?", "c.visibility <> 'deleted'", "c.is_initial = 0", "c.id > ?"}
 	args := []any{siteID, status, cursor}
 	if keyword != "" {
 		like := likePattern(keyword)
@@ -133,7 +133,7 @@ func (s *Store) CountCommentsForModeration(ctx context.Context, siteID int64) (m
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT moderation, COUNT(*)
 		FROM comments
-		WHERE site_id = ? AND visibility <> 'deleted'
+		WHERE site_id = ? AND visibility <> 'deleted' AND is_initial = 0
 		GROUP BY moderation`, siteID)
 	if err != nil {
 		return nil, err

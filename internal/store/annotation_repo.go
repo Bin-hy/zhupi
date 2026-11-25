@@ -74,8 +74,8 @@ func (s *Store) CreateAnnotation(ctx context.Context, a domain.Annotation, first
 		return domain.Annotation{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO comments (site_id, annotation_id, user_id, content, moderation, visibility, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO comments (site_id, annotation_id, user_id, content, moderation, visibility, is_initial, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
 		a.SiteID, id, a.CreatedBy, firstComment, domain.ModerationApproved, domain.VisibilityVisible, toUnix(now)); err != nil {
 		return domain.Annotation{}, err
 	}
@@ -334,12 +334,7 @@ func (s *Store) FirstCommentsByAnnotationIDs(ctx context.Context, siteID int64, 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT c.annotation_id, c.content
 		FROM comments c
-		JOIN (
-			SELECT annotation_id, MIN(id) AS id
-			FROM comments
-			WHERE site_id = ? AND visibility <> 'deleted' AND `+inClause("annotation_id", len(ids))+`
-			GROUP BY annotation_id
-		) first ON first.id = c.id`, args...)
+		WHERE c.site_id = ? AND c.is_initial = 1 AND `+inClause("c.annotation_id", len(ids)), args...)
 	if err != nil {
 		return nil, err
 	}

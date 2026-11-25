@@ -145,6 +145,22 @@ func (s *Store) ListAnnotations(ctx context.Context, q AnnotationQuery) ([]domai
 			args = append(args, q.ViewerID)
 		}
 	}
+	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
+		like := likePattern(keyword)
+		include := 0
+		if q.IncludeUnapproved {
+			include = 1
+		}
+		conds = append(conds, `(a.quote_exact LIKE ? ESCAPE '\' OR a.page_title LIKE ? ESCAPE '\'
+			OR a.section LIKE ? ESCAPE '\' OR u.display_name LIKE ? ESCAPE '\'
+			OR EXISTS (
+				SELECT 1 FROM comments c JOIN users cu ON cu.id = c.user_id
+				WHERE c.annotation_id = a.id AND c.visibility <> 'deleted'
+					AND (c.content LIKE ? ESCAPE '\' OR cu.display_name LIKE ? ESCAPE '\')
+					AND ((c.moderation = 'approved' AND c.visibility = 'visible') OR c.user_id = ? OR ? = 1)
+			))`)
+		args = append(args, like, like, like, like, like, like, q.ViewerID, include)
+	}
 
 	sort := q.Sort
 	if !sort.Valid() {
@@ -235,7 +251,7 @@ func (s *Store) ListAnnotationsForModeration(ctx context.Context, siteID int64, 
 	args := []any{siteID, status, cursor}
 	if keyword != "" {
 		like := likePattern(keyword)
-		conds = append(conds, `(a.quote_exact LIKE ? ESCAPE '\' OR a.page_title LIKE ? ESCAPE '\' OR a.section LIKE ? ESCAPE '\' OR u.display_name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM comments c2 WHERE c2.annotation_id = a.id AND c2.content LIKE ? ESCAPE '\'))`)
+		conds = append(conds, `(a.quote_exact LIKE ? ESCAPE '\' OR a.page_title LIKE ? ESCAPE '\' OR a.section LIKE ? ESCAPE '\' OR u.display_name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM comments c2 WHERE c2.annotation_id = a.id AND c2.visibility <> 'deleted' AND c2.content LIKE ? ESCAPE '\'))`)
 		args = append(args, like, like, like, like, like)
 	}
 	args = append(args, limit+1)
@@ -304,6 +320,37 @@ func (s *Store) AnnotationsByIDs(ctx context.Context, siteID int64, ids []int64)
 			return nil, err
 		}
 		out[a.ID] = a
+	}
+	return out, rows.Err()
+}
+
+// FirstCommentsByAnnotationIDs 批量读取每条批注的首条评论（批注正文），用于审核列表的父级上下文。
+func (s *Store) FirstCommentsByAnnotationIDs(ctx context.Context, siteID int64, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := append([]any{siteID}, int64Args(ids)...)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT c.annotation_id, c.content
+		FROM comments c
+		JOIN (
+			SELECT annotation_id, MIN(id) AS id
+			FROM comments
+			WHERE site_id = ? AND visibility <> 'deleted' AND `+inClause("annotation_id", len(ids))+`
+			GROUP BY annotation_id
+		) first ON first.id = c.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var annotationID int64
+		var content string
+		if err := rows.Scan(&annotationID, &content); err != nil {
+			return nil, err
+		}
+		out[annotationID] = content
 	}
 	return out, rows.Err()
 }

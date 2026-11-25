@@ -29,6 +29,7 @@ type ListInput struct {
 	PageKey string
 	Filter  domain.ListFilter
 	Sort    domain.AnnotationSort
+	Keyword string
 	Cursor  int64
 	Limit   int
 }
@@ -75,6 +76,10 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 	if (filter == domain.ListMine || filter == domain.ListPending) && p.User.ID == 0 {
 		return PageResult{}, domain.Unauthorized("该筛选需要登录")
 	}
+	keyword := strings.TrimSpace(in.Keyword)
+	if len([]rune(keyword)) > 100 {
+		keyword = string([]rune(keyword)[:100])
+	}
 	include := p.IsSuperadmin || p.IsSiteAdmin
 	list, next, err := s.annotations.ListAnnotations(ctx, store.AnnotationQuery{
 		SiteID:            site.ID,
@@ -82,6 +87,7 @@ func (s *AnnotationService) ListPage(ctx context.Context, p domain.Principal, si
 		ViewerID:          p.User.ID,
 		Filter:            filter,
 		Sort:              sort,
+		Keyword:           keyword,
 		IncludeUnapproved: include,
 		Cursor:            in.Cursor,
 		Limit:             in.Limit,

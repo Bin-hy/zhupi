@@ -68,6 +68,7 @@ type AnnotationQuery struct {
 	ViewerID          int64
 	Filter            domain.ListFilter
 	Sort              domain.AnnotationSort
+	Keyword           string
 	IncludeUnapproved bool
 	Cursor            int64
 	Limit             int
@@ -77,6 +78,7 @@ type AnnotationRepo interface {
 	CreateAnnotation(ctx context.Context, a domain.Annotation, firstComment string) (domain.Annotation, error)
 	AnnotationByID(ctx context.Context, siteID, id int64) (domain.Annotation, error)
 	AnnotationsByIDs(ctx context.Context, siteID int64, ids []int64) (map[int64]domain.Annotation, error)
+	FirstCommentsByAnnotationIDs(ctx context.Context, siteID int64, ids []int64) (map[int64]string, error)
 	ListAnnotations(ctx context.Context, q AnnotationQuery) ([]domain.Annotation, int64, error)
 	CountPageAnnotations(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (int, error)
 	CountPageAnnotationsByFilter(ctx context.Context, siteID int64, pageKey string, viewerID int64, includeUnapproved bool) (map[domain.ListFilter]int, error)

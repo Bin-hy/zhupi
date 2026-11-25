@@ -48,15 +48,16 @@ type Queue struct {
 
 // AnnotationBrief 是评论审核时展示的父批注摘要，避免审核员离开当前列表。
 type AnnotationBrief struct {
-	ID         int64                    `json:"id"`
-	PageKey    string                   `json:"pageKey"`
-	PageTitle  string                   `json:"pageTitle"`
-	QuoteExact string                   `json:"quoteExact"`
-	Section    string                   `json:"section,omitempty"`
-	Status     domain.AnnotationStatus  `json:"status"`
-	Moderation domain.ModerationStatus  `json:"moderation"`
-	Visibility domain.Visibility        `json:"visibility"`
-	Author     domain.Author            `json:"author"`
+	ID         int64                   `json:"id"`
+	PageKey    string                  `json:"pageKey"`
+	PageTitle  string                  `json:"pageTitle"`
+	QuoteExact string                  `json:"quoteExact"`
+	Body       string                  `json:"body,omitempty"`
+	Section    string                  `json:"section,omitempty"`
+	Status     domain.AnnotationStatus `json:"status"`
+	Moderation domain.ModerationStatus `json:"moderation"`
+	Visibility domain.Visibility       `json:"visibility"`
+	Author     domain.Author           `json:"author"`
 }
 
 // ModerationComment 在评论字段之外附带父批注，前端可直接展示引用与原文入口。
@@ -114,6 +115,7 @@ func (m *ModerationService) Queue(ctx context.Context, p domain.Principal, siteI
 		}
 	}
 	parents := map[int64]domain.Annotation{}
+	bodies := map[int64]string{}
 	if len(comments) > 0 {
 		ids := make([]int64, 0, len(comments))
 		seen := map[int64]bool{}
@@ -127,6 +129,10 @@ func (m *ModerationService) Queue(ctx context.Context, p domain.Principal, siteI
 		if err != nil {
 			return Queue{}, err
 		}
+		bodies, err = m.annotations.FirstCommentsByAnnotationIDs(ctx, siteID, ids)
+		if err != nil {
+			return Queue{}, err
+		}
 	}
 	out := make([]ModerationComment, len(comments))
 	for i, c := range comments {
@@ -134,6 +140,7 @@ func (m *ModerationService) Queue(ctx context.Context, p domain.Principal, siteI
 		if a, ok := parents[c.AnnotationID]; ok {
 			out[i].Parent = &AnnotationBrief{
 				ID: a.ID, PageKey: a.PageKey, PageTitle: a.PageTitle, QuoteExact: a.QuoteExact,
+				Body:    bodies[a.ID],
 				Section: a.Section, Status: a.Status, Moderation: a.Moderation,
 				Visibility: a.Visibility, Author: a.Author,
 			}

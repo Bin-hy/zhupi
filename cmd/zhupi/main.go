@@ -132,7 +132,7 @@ func runServe() {
 func runAdmin(args []string) {
 	log := logger()
 	if len(args) == 0 {
-		fmt.Println("用法: zhupi admin <migrate|site|promote|users|password> [...]")
+		fmt.Println("用法: zhupi admin <migrate|site|provider|promote|users|password> [...]")
 		os.Exit(2)
 	}
 	cfg, err := config.Load()
@@ -154,7 +154,12 @@ func runAdmin(args []string) {
 
 	sites := service.NewSiteService(st, true)
 	adminSvc := service.NewAdminService(st, st, st, st, st, st)
-	authSvc := service.NewAuthService(cfg, st, st, st, st, st, st, nil, nil, nil)
+	box, err := crypto.New(cfg.SecretKey)
+	if err != nil {
+		log.Error("初始化加密失败", "err", err)
+		os.Exit(1)
+	}
+	authSvc := service.NewAuthService(cfg, st, st, st, st, st, st, box, nil, authpkg.NewOIDCClient(nil))
 	super := domain.Principal{User: domain.User{ID: 0, DisplayName: "cli"}, IsSuperadmin: true}
 
 	switch args[0] {
@@ -164,6 +169,8 @@ func runAdmin(args []string) {
 		runPasswordCLI(ctx, authSvc, args[1:])
 	case "site":
 		runSiteCLI(ctx, st, sites, adminSvc, super, args[1:])
+	case "provider":
+		runProviderCLI(ctx, st, authSvc, args[1:])
 	case "promote":
 		fs := flag.NewFlagSet("promote", flag.ExitOnError)
 		login := fs.String("github-login", "", "GitHub 登录名")
@@ -303,6 +310,283 @@ func runSiteCLI(ctx context.Context, st *store.Store, sites *service.SiteService
 	default:
 		fail("未知 site 子命令: %s", args[0])
 	}
+}
+
+// providerCLIView 在提供商字段之外附带站点名，便于 CLI 输出直接定位。
+type providerCLIView struct {
+	domain.OIDCProvider
+	SiteName string `json:"siteName"`
+}
+
+func listAllSites(ctx context.Context, st *store.Store) ([]domain.Site, error) {
+	var out []domain.Site
+	cursor := int64(0)
+	for {
+		sites, next, err := st.ListSites(ctx, cursor, 200)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sites...)
+		if next == 0 {
+			return out, nil
+		}
+		cursor = next
+	}
+}
+
+func runProviderCLI(ctx context.Context, st *store.Store, authSvc *service.AuthService, args []string) {
+	if len(args) == 0 {
+		fail("用法: admin provider <list|add|update|delete> [...]")
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("provider list", flag.ExitOnError)
+		siteRef := fs.String("site", "", "siteKey 或 ID；省略时列出全部站点")
+		_ = fs.Parse(args[1:])
+		out := make([]providerCLIView, 0)
+		if *siteRef != "" {
+			site := mustSite(ctx, st, *siteRef)
+			list, err := st.ListProvidersBySite(ctx, site.ID, false)
+			if err != nil {
+				fail("读取提供商失败: %v", err)
+			}
+			for _, p := range list {
+				out = append(out, providerCLIView{OIDCProvider: p, SiteName: site.Name})
+			}
+		} else {
+			sites, err := listAllSites(ctx, st)
+			if err != nil {
+				fail("读取站点失败: %v", err)
+			}
+			for _, site := range sites {
+				list, err := st.ListProvidersBySite(ctx, site.ID, false)
+				if err != nil {
+					fail("读取站点 %d 的提供商失败: %v", site.ID, err)
+				}
+				for _, p := range list {
+					out = append(out, providerCLIView{OIDCProvider: p, SiteName: site.Name})
+				}
+			}
+		}
+		printJSON(out)
+	case "add":
+		fs := flag.NewFlagSet("provider add", flag.ExitOnError)
+		siteRef := fs.String("site", "", "siteKey 或 ID")
+		name := fs.String("name", "", "展示名，例如 yufu")
+		issuer := fs.String("issuer", "", "OIDC issuer，例如 https://cobotrix.gataccay.com")
+		clientID := fs.String("client-id", "", "OIDC client id")
+		clientSecret := fs.String("client-secret", "", "OIDC client secret")
+		clientSecretFile := fs.String("client-secret-file", "", "从文件读取 client secret（优先于 --client-secret）")
+		scopesRaw := fs.String("scopes", "openid,profile,email", "逗号分隔的 scopes")
+		domainsRaw := fs.String("allowed-email-domains", "", "逗号分隔的允许邮箱域")
+		enabledRaw := fs.String("enabled", "true", "true|false")
+		_ = fs.Parse(args[1:])
+		secret, err := readSecret(*clientSecret, *clientSecretFile)
+		if err != nil {
+			fail("读取 client secret 失败: %v", err)
+		}
+		providerName := strings.TrimSpace(*name)
+		if len(providerName) == 0 || len(providerName) > 64 {
+			fail("提供商名称需为 1–64 字符")
+		}
+		enabled, ok := parseProviderEnabled(*enabledRaw)
+		if !ok {
+			fail("--enabled 只能是 true 或 false")
+		}
+		if *siteRef == "" || strings.TrimSpace(*issuer) == "" ||
+			strings.TrimSpace(*clientID) == "" || secret == "" {
+			fail("需要 --site、--name、--issuer、--client-id、--client-secret 或 --client-secret-file")
+		}
+		site := mustSite(ctx, st, *siteRef)
+		issuerURL := strings.TrimRight(strings.TrimSpace(*issuer), "/")
+		if err := authSvc.ValidateIssuer(ctx, issuerURL); err != nil {
+			fail("OIDC Discovery 校验失败: %v", err)
+		}
+		cipher, err := authSvc.EncryptSecret(secret)
+		if err != nil {
+			fail("加密 client secret 失败: %v", err)
+		}
+		p, err := st.CreateProvider(ctx, domain.OIDCProvider{
+			SiteID: site.ID, Name: providerName, Issuer: issuerURL,
+			ClientID: strings.TrimSpace(*clientID), ClientSecretCipher: cipher,
+			Scopes: providerScopes(*scopesRaw), AllowedEmailDomains: normalizeProviderDomains(*domainsRaw), Enabled: enabled,
+		})
+		if err != nil {
+			fail("创建提供商失败: %v", err)
+		}
+		printJSON(providerCLIView{OIDCProvider: p, SiteName: site.Name})
+	case "update":
+		fs := flag.NewFlagSet("provider update", flag.ExitOnError)
+		id := fs.Int64("id", 0, "提供商 ID")
+		name := fs.String("name", "", "展示名")
+		issuer := fs.String("issuer", "", "OIDC issuer")
+		clientID := fs.String("client-id", "", "OIDC client id")
+		clientSecret := fs.String("client-secret", "", "OIDC client secret；留空保持原值")
+		clientSecretFile := fs.String("client-secret-file", "", "从文件读取 client secret；留空保持原值")
+		scopesRaw := fs.String("scopes", "", "逗号分隔的 scopes；留空保持原值")
+		domainsRaw := fs.String("allowed-email-domains", "", "逗号分隔的允许邮箱域；留空保持原值")
+		enabledRaw := fs.String("enabled", "", "true|false；留空保持原值")
+		_ = fs.Parse(args[1:])
+		if *id <= 0 {
+			fail("需要 --id")
+		}
+		p, err := st.ProviderByIDAny(ctx, *id)
+		if err != nil {
+			fail("提供商不存在: %v", err)
+		}
+		changed := false
+		issuerChanged := false
+		if providerName := strings.TrimSpace(*name); providerName != "" {
+			if len(providerName) > 64 {
+				fail("提供商名称需为 1–64 字符")
+			}
+			if providerName != p.Name {
+				p.Name = providerName
+				changed = true
+			}
+		}
+		if raw := strings.TrimSpace(*issuer); raw != "" {
+			issuer := strings.TrimRight(raw, "/")
+			if issuer != p.Issuer {
+				p.Issuer = issuer
+				issuerChanged = true
+				changed = true
+			}
+		}
+		if clientID := strings.TrimSpace(*clientID); clientID != "" && clientID != p.ClientID {
+			p.ClientID = clientID
+			changed = true
+		}
+		secret, err := readSecret(*clientSecret, *clientSecretFile)
+		if err != nil {
+			fail("读取 client secret 失败: %v", err)
+		}
+		if secret != "" {
+			cipher, err := authSvc.EncryptSecret(secret)
+			if err != nil {
+				fail("加密 client secret 失败: %v", err)
+			}
+			p.ClientSecretCipher = cipher
+			changed = true
+		}
+		if raw := strings.TrimSpace(*scopesRaw); raw != "" {
+			p.Scopes = providerScopes(raw)
+			changed = true
+		}
+		if raw := strings.TrimSpace(*domainsRaw); raw != "" {
+			p.AllowedEmailDomains = normalizeProviderDomains(raw)
+			changed = true
+		}
+		if raw := strings.TrimSpace(*enabledRaw); raw != "" {
+			enabled, ok := parseProviderEnabled(raw)
+			if !ok {
+				fail("--enabled 只能是 true 或 false")
+			}
+			if enabled != p.Enabled {
+				p.Enabled = enabled
+				changed = true
+			}
+		}
+		if !changed {
+			fail("没有需要更新的字段")
+		}
+		if issuerChanged {
+			if err := authSvc.ValidateIssuer(ctx, p.Issuer); err != nil {
+				fail("OIDC Discovery 校验失败: %v", err)
+			}
+		}
+		if err := st.UpdateProvider(ctx, p); err != nil {
+			fail("更新提供商失败: %v", err)
+		}
+		site, err := st.SiteByID(ctx, p.SiteID)
+		if err != nil {
+			fail("读取站点失败: %v", err)
+		}
+		printJSON(providerCLIView{OIDCProvider: p, SiteName: site.Name})
+	case "delete":
+		fs := flag.NewFlagSet("provider delete", flag.ExitOnError)
+		id := fs.Int64("id", 0, "提供商 ID")
+		_ = fs.Parse(args[1:])
+		if *id <= 0 {
+			fail("需要 --id")
+		}
+		p, err := st.ProviderByIDAny(ctx, *id)
+		if err != nil {
+			fail("提供商不存在: %v", err)
+		}
+		if err := st.DeleteProvider(ctx, p.SiteID, p.ID); err != nil {
+			fail("删除提供商失败: %v", err)
+		}
+		fmt.Printf("已删除提供商 %d (%s)\n", p.ID, p.Name)
+	default:
+		fail("未知 provider 子命令: %s", args[0])
+	}
+}
+
+func splitList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func providerScopes(raw string) []string {
+	scopes := uniqueStrings(splitList(raw))
+	if len(scopes) == 0 {
+		return []string{"openid", "email", "profile"}
+	}
+	return scopes
+}
+
+func normalizeProviderDomains(raw string) []string {
+	domains := splitList(raw)
+	out := make([]string, 0, len(domains))
+	for _, d := range domains {
+		d = strings.ToLower(strings.TrimPrefix(d, "@"))
+		if d != "" {
+			out = append(out, d)
+		}
+	}
+	return uniqueStrings(out)
+}
+
+func uniqueStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, v := range values {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func parseProviderEnabled(raw string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "yes":
+		return true, true
+	case "false", "0", "no":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func readSecret(raw, file string) (string, error) {
+	if strings.TrimSpace(file) != "" {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(data)), nil
+	}
+	return strings.TrimSpace(raw), nil
 }
 
 type multiFlag []string

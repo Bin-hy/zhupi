@@ -128,7 +128,7 @@ zhupi admin provider update --id 3 --enabled false
 zhupi admin provider update --id 3 --client-secret-file /run/secrets/oidc
 ```
 
-留空的字段保持原值。修改 issuer 时同样会做 Discovery 校验。
+留空的字段保持原值。仅当 issuer 变化时才做 Discovery 校验；停用、改名等操作可离线执行。
 
 ### delete
 

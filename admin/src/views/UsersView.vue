@@ -2,11 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
-import type { User } from '../api/types'
+import type { LocalAdminResult, User } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import ErrorState from '../components/ErrorState.vue'
+import GeneratedPasswordDialog from '../components/GeneratedPasswordDialog.vue'
 import LoadMore from '../components/LoadMore.vue'
+import LocalAdminFormDialog from '../components/LocalAdminFormDialog.vue'
 import StatusTag from '../components/StatusTag.vue'
+import { auth } from '../stores/auth'
 import { formatTime } from '../utils/format'
 
 const users = ref<User[]>([])
@@ -14,6 +17,13 @@ const nextCursor = ref(0)
 const loading = ref(false)
 const error = ref('')
 const search = ref('')
+const localMap = ref<Record<number, string>>({})
+const sites = computed(() => auth.sites)
+
+const openVisible = ref(false)
+const openUser = ref<{ id: number; displayName: string } | null>(null)
+const passwordVisible = ref(false)
+const passwordValue = ref('')
 
 const filtered = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -32,7 +42,7 @@ async function load(reset = true): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.listUsers(reset ? 0 : nextCursor.value)
+    const [res] = await Promise.all([api.listUsers(reset ? 0 : nextCursor.value), loadLocal()])
     users.value = reset ? res.users : [...users.value, ...res.users]
     nextCursor.value = res.nextCursor
   } catch (err: any) {
@@ -40,6 +50,31 @@ async function load(reset = true): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function loadLocal(): Promise<void> {
+  try {
+    const res = await api.listLocalAdmins()
+    const map: Record<number, string> = {}
+    for (const admin of res.admins) map[admin.userId] = admin.username
+    localMap.value = map
+  } catch {
+    localMap.value = {}
+  }
+}
+
+function openCredential(user: any): void {
+  openUser.value = { id: user.id, displayName: user.displayName || `#${user.id}` }
+  openVisible.value = true
+}
+
+function onOpenSuccess(result: LocalAdminResult): void {
+  ElMessage.success('已开通本地密码')
+  if (result.generatedPassword) {
+    passwordValue.value = result.generatedPassword
+    passwordVisible.value = true
+  }
+  void load(true)
 }
 
 async function setBan(user: any, banned: boolean): Promise<void> {
@@ -92,6 +127,20 @@ onMounted(() => void load(true))
             <el-tag v-else type="info" size="small">用户</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="本地账号" width="170">
+          <template #default="{ row }">
+            <span v-if="localMap[row.id]">{{ localMap[row.id] }}</span>
+            <el-button
+              v-else
+              link
+              type="primary"
+              :disabled="row.status === 'banned'"
+              @click="openCredential(row)"
+            >
+              开通本地密码
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="注册时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
@@ -112,5 +161,15 @@ onMounted(() => void load(true))
       <EmptyState v-if="!loading && filtered.length === 0" description="没有用户" />
       <LoadMore :has-more="nextCursor > 0" :loading="loading" @load="load(false)" />
     </template>
+
+    <LocalAdminFormDialog
+      v-model="openVisible"
+      mode="open"
+      :user="openUser"
+      :users="users"
+      :sites="sites"
+      @success="onOpenSuccess"
+    />
+    <GeneratedPasswordDialog v-model="passwordVisible" :password="passwordValue" />
   </div>
 </template>

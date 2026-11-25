@@ -26,7 +26,7 @@ zhupi serve
 - `DB_PATH`
 - `PUBLIC_BASE_URL`
 
-启动时自动执行数据库迁移，并初始化本地超管（仅当不存在凭据时）。
+启动时自动执行数据库迁移，并初始化本地管理员（仅当不存在本地凭据时）。
 
 ## admin migrate
 
@@ -83,7 +83,8 @@ zhupi admin site add-admin --site <siteKey 或 ID> --user <用户 ID 或 GitHub 
 zhupi admin site remove-admin --site <siteKey 或 ID> --user <用户 ID 或 GitHub 登录名>
 ```
 
-用户需要先登录过一次，才能按 GitHub 登录名找到。
+用户需要先登录过一次，才能按 GitHub 登录名找到。站点管理员还需在后台或 CLI
+为其开通本地密码，才能进入管理后台。
 
 ## admin provider
 
@@ -139,20 +140,28 @@ zhupi admin provider delete --id 3
 ## admin promote
 
 ```bash
-zhupi admin promote --github-login <login>
 zhupi admin promote --user-id <id>
 ```
 
-把用户提升为超级管理员。
+把已有本地密码的账号授予超级管理员。后台「管理员账号」页是更推荐的方式；
+按 GitHub 登录名提升的能力已移除。
 
-## admin users list
+## admin users list / open
 
 ```bash
 zhupi admin users list
 zhupi admin users list --json
 ```
 
-输出用户 ID、名称、状态与是否超管。
+输出用户 ID、名称、状态、本地用户名与是否超管。
+
+```bash
+# 为已有用户开通本地密码；省略 --password 时生成并打印一次
+zhupi admin users open --user-id <id> --username <name>
+zhupi admin users open --user-id <id> --username <name> --password 'new-password'
+```
+
+开通后该账号首次登录必须改密。
 
 ## admin password reset
 
@@ -164,7 +173,8 @@ zhupi admin password reset --username admin
 zhupi admin password reset --username admin --password 'new-password'
 ```
 
-重置会吊销该账号的全部会话。若该账号不是本地凭据账号，会返回错误。
+适用于任意本地管理员账号。重置会吊销该账号的全部会话；若该账号不是本地凭据账号，
+会返回错误。
 
 ## 环境依赖
 

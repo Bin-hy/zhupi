@@ -24,6 +24,9 @@ export type Site = {
 export type SiteAdmin = {
   siteId: number
   userId: number
+  displayName: string
+  localUsername: string
+  mustChangePassword: boolean
   grantedBy: number
   createdAt: string
 }
@@ -154,15 +157,69 @@ export type Queue = {
 }
 
 export type AdminAuthProviders = {
-  github: boolean
   local: boolean
-  providers: Array<{
-    id: number
-    siteId: number
-    siteName: string
-    name: string
-    issuer: string
-  }>
+}
+
+export type Identity = {
+  id: number
+  provider: 'github' | 'oidc' | 'dev'
+  siteId: number
+  issuer: string
+  subject: string
+  handle: string
+  email?: string
+  emailVerified: boolean
+  avatarUrl: string
+  createdAt: string
+  lastLoginAt: string
+}
+
+export type BindableProvider = {
+  id: number
+  siteId: number
+  siteName: string
+  name: string
+  issuer: string
+}
+
+export type AdminIdentities = {
+  identities: Identity[]
+  bindable: {
+    github: boolean
+    providers: BindableProvider[]
+  }
+}
+
+export type LocalAdminAccount = {
+  userId: number
+  username: string
+  displayName: string
+  status: 'active' | 'banned'
+  isSuperadmin: boolean
+  mustChangePassword: boolean
+  siteIds: number[]
+  createdAt: string
+}
+
+export type CreateLocalAdminInput = {
+  username: string
+  displayName: string
+  initialPassword?: string
+  isSuperadmin: boolean
+  siteIds: number[]
+}
+
+export type OpenLocalCredentialInput = {
+  userId: number
+  username: string
+  initialPassword?: string
+  isSuperadmin: boolean
+  siteIds: number[]
+}
+
+export type LocalAdminResult = {
+  account: LocalAdminAccount
+  generatedPassword?: string
 }
 
 export type CreateSiteInput = {

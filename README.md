@@ -43,7 +43,7 @@ Self-hosted, embeddable text annotation and inline comments for any web page.
 | **可嵌入 SDK** | 支持 `<script>` 与 ESM；Shadow DOM 隔离 UI，不覆盖宿主 CSS |
 | **多框架与 SPA** | 适用于静态博客、文档站和客户端路由；路由切换用 `setPage()` 更新页面 |
 | **多站点与治理** | `siteKey` + Origin 白名单；站点级审核、封禁与管理员权限 |
-| **登录与账号** | GitHub OAuth、站点级 OIDC、本地超管兜底；身份绑定与会话管理 |
+| **登录与账号** | 站点访客：GitHub OAuth、站点级 OIDC；管理后台：本地账号密码；身份绑定与会话管理 |
 | **自托管** | 单 Go 二进制 + SQLite（WAL），内嵌 SDK 与管理后台；Docker 一键部署 |
 | **开放 API** | 批注、评论、账号与管理 API；统一错误结构与请求 ID |
 
@@ -76,7 +76,7 @@ docker compose exec zhupi /app/zhupi admin site create \
   --origin http://127.0.0.1:5173
 ```
 
-管理后台：<http://127.0.0.1:8080/admin/>，首次启动默认本地超管 `admin` / `admin`，登录后强制改密。
+管理后台：<http://127.0.0.1:8080/admin/>，首次启动默认本地管理员 `admin` / `admin`，登录后强制改密。
 
 源码启动、示例页面和完整配置见 [快速开始](https://zhupi.pages.dev/getting-started/quick-start/)。
 
@@ -118,7 +118,7 @@ Skill 覆盖部署、创建站点、嵌入 SDK、SPA 路由与排错，安装与
 | [项目简介](https://zhupi.pages.dev/getting-started/overview/) | 产品定位、组成、适用场景与 Artalk 对比 |
 | [快速开始](https://zhupi.pages.dev/getting-started/quick-start/) | Docker / 源码启动、创建站点、示例页 |
 | [接入指南](https://zhupi.pages.dev/sdk/integration/) | script / ESM、SPA、VitePress 示例 |
-| [登录与身份](https://zhupi.pages.dev/sites/authentication/) | GitHub、OIDC、本地超管、身份绑定 |
+| [登录与身份](https://zhupi.pages.dev/sites/authentication/) | 访客 GitHub/OIDC、后台本地账号、身份绑定 |
 | [站点与权限](https://zhupi.pages.dev/sites/roles-moderation/) | 多站点、角色、审核、封禁、后台 |
 | [部署](https://zhupi.pages.dev/deployment/docker/) | Docker、反向代理、备份与环境变量 |
 | [API 与 CLI](https://zhupi.pages.dev/api/overview/) | [公共 API](https://zhupi.pages.dev/api/overview/)、[管理 API](https://zhupi.pages.dev/api/admin-account/)、[CLI 参考](https://zhupi.pages.dev/cli/reference/) |

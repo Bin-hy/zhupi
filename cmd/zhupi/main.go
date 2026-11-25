@@ -173,42 +173,70 @@ func runAdmin(args []string) {
 		runProviderCLI(ctx, st, authSvc, args[1:])
 	case "promote":
 		fs := flag.NewFlagSet("promote", flag.ExitOnError)
-		login := fs.String("github-login", "", "GitHub 登录名")
 		userID := fs.Int64("user-id", 0, "用户 ID")
 		_ = fs.Parse(args[1:])
-		switch {
-		case *login != "":
-			id, err := adminSvc.PromoteByGitHubHandle(ctx, *login)
-			if err != nil {
-				fail("提升失败: %v", err)
-			}
-			fmt.Printf("已将用户 %d 提升为超级管理员\n", id)
-		case *userID > 0:
-			if err := adminSvc.PromoteUser(ctx, *userID); err != nil {
-				fail("提升失败: %v", err)
-			}
-			fmt.Printf("已将用户 %d 提升为超级管理员\n", *userID)
-		default:
-			fail("需要 --github-login 或 --user-id")
+		if *userID <= 0 {
+			fail("需要 --user-id")
 		}
+		if err := adminSvc.PromoteUser(ctx, *userID); err != nil {
+			fail("提升失败: %v", err)
+		}
+		fmt.Printf("已将用户 %d 提升为超级管理员\n", *userID)
 	case "users":
-		if len(args) < 2 || args[1] != "list" {
-			fail("用法: admin users list [--json]")
+		if len(args) < 2 {
+			fail("用法: admin users list [--json] | admin users open --user-id <id> --username <name> [--password <pwd>]")
 		}
-		fs := flag.NewFlagSet("users list", flag.ExitOnError)
-		jsonOut := fs.Bool("json", false, "输出 JSON")
-		_ = fs.Parse(args[2:])
-		list, _, err := adminSvc.ListUsers(ctx, super, 0, 200)
-		if err != nil {
-			fail("读取用户失败: %v", err)
-		}
-		if *jsonOut {
-			printJSON(list)
-			return
-		}
-		fmt.Printf("%-6s %-24s %-10s %s\n", "ID", "名称", "状态", "超管")
-		for _, u := range list {
-			fmt.Printf("%-6d %-24s %-10s %v\n", u.ID, u.DisplayName, u.Status, u.IsSuperadmin)
+		switch args[1] {
+		case "list":
+			fs := flag.NewFlagSet("users list", flag.ExitOnError)
+			jsonOut := fs.Bool("json", false, "输出 JSON")
+			_ = fs.Parse(args[2:])
+			list, _, err := adminSvc.ListUsers(ctx, super, 0, 200)
+			if err != nil {
+				fail("读取用户失败: %v", err)
+			}
+			if *jsonOut {
+				printJSON(list)
+				return
+			}
+			admins, err := adminSvc.ListLocalAdmins(ctx, super)
+			if err != nil {
+				fail("读取管理员失败: %v", err)
+			}
+			local := map[int64]string{}
+			for _, a := range admins {
+				local[a.UserID] = a.Username
+			}
+			fmt.Printf("%-6s %-24s %-10s %-14s %s\n", "ID", "名称", "状态", "本地账号", "超管")
+			for _, u := range list {
+				username := local[u.ID]
+				if username == "" {
+					username = "-"
+				}
+				fmt.Printf("%-6d %-24s %-10s %-14s %v\n", u.ID, u.DisplayName, u.Status, username, u.IsSuperadmin)
+			}
+		case "open":
+			fs := flag.NewFlagSet("users open", flag.ExitOnError)
+			userID := fs.Int64("user-id", 0, "用户 ID")
+			username := fs.String("username", "", "本地用户名")
+			password := fs.String("password", "", "初始密码；省略时生成随机密码")
+			_ = fs.Parse(args[2:])
+			if *userID <= 0 || strings.TrimSpace(*username) == "" {
+				fail("需要 --user-id 与 --username")
+			}
+			res, err := adminSvc.OpenLocalCredential(ctx, super, service.OpenLocalCredentialInput{
+				UserID: *userID, Username: *username, InitialPassword: *password,
+			})
+			if err != nil {
+				fail("开通失败: %v", err)
+			}
+			if res.GeneratedPassword != "" {
+				fmt.Printf("已为用户 %d 开通本地密码：%s（仅显示一次）\n", *userID, res.GeneratedPassword)
+			} else {
+				fmt.Printf("已为用户 %d 开通本地密码\n", *userID)
+			}
+		default:
+			fail("未知命令: users %s", args[1])
 		}
 	default:
 		fail("未知命令: %s", args[0])

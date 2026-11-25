@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -38,6 +39,9 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.auth.FinishGitHub(r.Context(), query.Get("code"), query.Get("state"), s.meta(r))
 	if err != nil {
+		if s.redirectBindError(w, r, err) {
+			return
+		}
 		s.writeErr(w, r, err)
 		return
 	}
@@ -80,6 +84,9 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.auth.FinishOIDC(r.Context(), providerID, query.Get("code"), query.Get("state"), s.meta(r))
 	if err != nil {
+		if s.redirectBindError(w, r, err) {
+			return
+		}
 		s.writeErr(w, r, err)
 		return
 	}
@@ -98,6 +105,24 @@ func (s *Server) redirectAuthResult(w http.ResponseWriter, r *http.Request, res 
 		u.Fragment = "annot_token=" + url.QueryEscape(res.Token)
 	}
 	http.Redirect(w, r, u.String(), http.StatusFound)
+}
+
+func (s *Server) redirectBindError(w http.ResponseWriter, r *http.Request, err error) bool {
+	var bindErr *service.BindError
+	if !errors.As(err, &bindErr) {
+		return false
+	}
+	target, parseErr := url.Parse(bindErr.Flow.ReturnTo)
+	if parseErr != nil || target.Scheme == "" || target.Host == "" {
+		return false
+	}
+	message := "绑定失败，请重试"
+	if appErr, ok := domain.AsAppError(bindErr.Err); ok {
+		message = appErr.Message
+	}
+	target.Fragment = "annot_bind=error&message=" + message
+	http.Redirect(w, r, target.String(), http.StatusFound)
+	return true
 }
 
 func (s *Server) handleBindGitHubStart(w http.ResponseWriter, r *http.Request) {

@@ -187,6 +187,7 @@ func (a *AuthService) LocalLogin(ctx context.Context, username, password string,
 	if err := a.sessions.CreateSession(ctx, domain.Session{
 		TokenHash:  hash,
 		UserID:     user.ID,
+		AuthMethod: domain.AuthMethodLocal,
 		UserAgent:  truncate(meta.UserAgent, 255),
 		IP:         truncate(meta.IP, 64),
 		CreatedAt:  now,
@@ -308,97 +309,17 @@ type AdminProviderView struct {
 }
 
 type AdminAuthProviders struct {
-	GitHub    bool                `json:"github"`
-	Local     bool                `json:"local"`
-	Providers []AdminProviderView `json:"providers"`
+	Local bool `json:"local"`
 }
 
 func (a *AuthService) AdminProviders(ctx context.Context) (AdminAuthProviders, error) {
-	list, err := a.providers.ListEnabledWithSite(ctx)
-	if err != nil {
-		return AdminAuthProviders{}, err
-	}
-	out := AdminAuthProviders{
-		GitHub:    a.github != nil && a.github.Configured(),
-		Providers: make([]AdminProviderView, 0, len(list)),
-	}
+	out := AdminAuthProviders{}
 	if a.localCreds != nil {
 		if n, err := a.localCreds.CountLocalCredentials(ctx); err == nil && n > 0 {
 			out.Local = true
 		}
 	}
-	for _, item := range list {
-		out.Providers = append(out.Providers, AdminProviderView{
-			ID: item.Provider.ID, SiteID: item.SiteID, SiteName: item.SiteName,
-			Name: item.Provider.Name, Issuer: item.Provider.Issuer,
-		})
-	}
 	return out, nil
-}
-
-func (a *AuthService) StartAdminGitHub(ctx context.Context, returnTo string) (string, error) {
-	if a.github == nil || !a.github.Configured() {
-		return "", domain.NewError("github_not_configured", "服务端未配置 GitHub 登录", 503)
-	}
-	state, hash, err := newState()
-	if err != nil {
-		return "", err
-	}
-	flow := domain.AuthFlow{
-		StateHash:    hash,
-		Mode:         domain.FlowLogin,
-		ProviderType: domain.ProviderGitHub,
-		Issuer:       authpkg.GitHubIssuer,
-		SiteID:       0,
-		ReturnTo:     safeAdminReturnTo(a.cfg.PublicBaseURL, returnTo),
-		ExpiresAt:    a.now().Add(10 * time.Minute),
-	}
-	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
-		return "", err
-	}
-	return a.github.AuthCodeURL(state), nil
-}
-
-func (a *AuthService) StartAdminOIDC(ctx context.Context, providerID int64, returnTo string) (string, error) {
-	provider, err := a.providers.ProviderByIDAny(ctx, providerID)
-	if err != nil {
-		return "", domain.NotFound("登录提供商不存在")
-	}
-	if !provider.Enabled {
-		return "", domain.Forbidden("provider_disabled", "登录提供商已停用")
-	}
-	cfg, _, err := a.oidcConfig(provider)
-	if err != nil {
-		return "", err
-	}
-	state, hash, err := newState()
-	if err != nil {
-		return "", err
-	}
-	verifier, err := randomBase64(32)
-	if err != nil {
-		return "", err
-	}
-	nonce, err := randomHex(16)
-	if err != nil {
-		return "", err
-	}
-	flow := domain.AuthFlow{
-		StateHash:    hash,
-		Mode:         domain.FlowLogin,
-		ProviderType: domain.ProviderOIDC,
-		ProviderID:   provider.ID,
-		Issuer:       authpkg.NormalizeIssuer(provider.Issuer),
-		SiteID:       provider.SiteID,
-		ReturnTo:     safeAdminReturnTo(a.cfg.PublicBaseURL, returnTo),
-		CodeVerifier: verifier,
-		Nonce:        nonce,
-		ExpiresAt:    a.now().Add(10 * time.Minute),
-	}
-	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
-		return "", err
-	}
-	return a.oidc.AuthCodeURL(ctx, cfg, state, nonce, verifier)
 }
 
 func safeAdminReturnTo(publicBaseURL, raw string) string {
@@ -430,6 +351,124 @@ func (a *AuthService) StartBindOIDC(ctx context.Context, userID, providerID int6
 		return "", domain.Unauthorized("用户不存在")
 	}
 	return a.startOIDC(ctx, providerID, site, returnTo, domain.FlowBind, userID)
+}
+
+type BindableIdentities struct {
+	GitHub    bool                `json:"github"`
+	Providers []AdminProviderView `json:"providers"`
+}
+
+type AdminIdentitiesResult struct {
+	Identities []domain.Identity  `json:"identities"`
+	Bindable   BindableIdentities `json:"bindable"`
+}
+
+func (a *AuthService) AdminBindableIdentities(ctx context.Context, userID int64) (AdminIdentitiesResult, error) {
+	if _, err := a.users.UserByID(ctx, userID); err != nil {
+		return AdminIdentitiesResult{}, domain.Unauthorized("用户不存在")
+	}
+	identities, err := a.identities.ListIdentitiesByUser(ctx, userID)
+	if err != nil {
+		return AdminIdentitiesResult{}, err
+	}
+	if identities == nil {
+		identities = make([]domain.Identity, 0)
+	}
+	list, err := a.providers.ListEnabledWithSite(ctx)
+	if err != nil {
+		return AdminIdentitiesResult{}, err
+	}
+	out := AdminIdentitiesResult{
+		Identities: identities,
+		Bindable: BindableIdentities{
+			GitHub:    a.github != nil && a.github.Configured(),
+			Providers: make([]AdminProviderView, 0, len(list)),
+		},
+	}
+	for _, item := range list {
+		out.Bindable.Providers = append(out.Bindable.Providers, AdminProviderView{
+			ID: item.Provider.ID, SiteID: item.SiteID, SiteName: item.SiteName,
+			Name: item.Provider.Name, Issuer: item.Provider.Issuer,
+		})
+	}
+	return out, nil
+}
+
+func (a *AuthService) StartAdminBindGitHub(ctx context.Context, userID int64) (string, error) {
+	if _, err := a.users.UserByID(ctx, userID); err != nil {
+		return "", domain.Unauthorized("用户不存在")
+	}
+	if a.github == nil || !a.github.Configured() {
+		return "", domain.NewError("github_not_configured", "服务端未配置 GitHub 登录", 503)
+	}
+	state, hash, err := newState()
+	if err != nil {
+		return "", err
+	}
+	flow := domain.AuthFlow{
+		StateHash:    hash,
+		Mode:         domain.FlowBind,
+		ProviderType: domain.ProviderGitHub,
+		Issuer:       authpkg.GitHubIssuer,
+		SiteID:       0,
+		UserID:       userID,
+		ReturnTo:     a.adminAccountURL(),
+		ExpiresAt:    a.now().Add(10 * time.Minute),
+	}
+	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
+		return "", err
+	}
+	return a.github.AuthCodeURL(state), nil
+}
+
+func (a *AuthService) StartAdminBindOIDC(ctx context.Context, userID, providerID int64) (string, error) {
+	if _, err := a.users.UserByID(ctx, userID); err != nil {
+		return "", domain.Unauthorized("用户不存在")
+	}
+	provider, err := a.providers.ProviderByIDAny(ctx, providerID)
+	if err != nil {
+		return "", domain.NotFound("登录提供商不存在")
+	}
+	if !provider.Enabled {
+		return "", domain.Forbidden("provider_disabled", "登录提供商已停用")
+	}
+	cfg, _, err := a.oidcConfig(provider)
+	if err != nil {
+		return "", err
+	}
+	state, hash, err := newState()
+	if err != nil {
+		return "", err
+	}
+	verifier, err := randomBase64(32)
+	if err != nil {
+		return "", err
+	}
+	nonce, err := randomHex(16)
+	if err != nil {
+		return "", err
+	}
+	flow := domain.AuthFlow{
+		StateHash:    hash,
+		Mode:         domain.FlowBind,
+		ProviderType: domain.ProviderOIDC,
+		ProviderID:   provider.ID,
+		Issuer:       authpkg.NormalizeIssuer(provider.Issuer),
+		SiteID:       provider.SiteID,
+		UserID:       userID,
+		ReturnTo:     a.adminAccountURL(),
+		CodeVerifier: verifier,
+		Nonce:        nonce,
+		ExpiresAt:    a.now().Add(10 * time.Minute),
+	}
+	if err := a.flows.CreateAuthFlow(ctx, flow); err != nil {
+		return "", err
+	}
+	return a.oidc.AuthCodeURL(ctx, cfg, state, nonce, verifier)
+}
+
+func (a *AuthService) adminAccountURL() string {
+	return strings.TrimRight(a.cfg.PublicBaseURL, "/") + "/admin/account"
 }
 
 func (a *AuthService) startOIDC(ctx context.Context, providerID int64, site domain.Site, returnTo string, mode domain.FlowMode, userID int64) (string, error) {
@@ -481,13 +520,17 @@ func (a *AuthService) FinishGitHub(ctx context.Context, code, state string, meta
 		return LoginResult{}, err
 	}
 	if flow.ProviderType != domain.ProviderGitHub {
-		return LoginResult{}, domain.Invalid("invalid_flow", "登录流程类型不匹配")
+		return LoginResult{}, wrapBindError(flow, domain.Invalid("invalid_flow", "登录流程类型不匹配"))
 	}
 	ext, err := a.github.Exchange(ctx, code)
 	if err != nil {
-		return LoginResult{}, domain.NewError("github_exchange_failed", "GitHub 登录失败，请重试", 502)
+		return LoginResult{}, wrapBindError(flow, domain.NewError("github_exchange_failed", "GitHub 登录失败，请重试", 502))
 	}
-	return a.completeLogin(ctx, flow, ext, meta)
+	res, err := a.completeLogin(ctx, flow, ext, meta)
+	if err != nil {
+		return LoginResult{}, wrapBindError(flow, err)
+	}
+	return res, nil
 }
 
 func (a *AuthService) FinishOIDC(ctx context.Context, providerID int64, code, state string, meta ClientMeta) (LoginResult, error) {
@@ -496,24 +539,28 @@ func (a *AuthService) FinishOIDC(ctx context.Context, providerID int64, code, st
 		return LoginResult{}, err
 	}
 	if flow.ProviderType != domain.ProviderOIDC || flow.ProviderID != providerID {
-		return LoginResult{}, domain.Invalid("invalid_flow", "登录流程与提供商不匹配")
+		return LoginResult{}, wrapBindError(flow, domain.Invalid("invalid_flow", "登录流程与提供商不匹配"))
 	}
 	provider, err := a.providers.ProviderByID(ctx, flow.SiteID, providerID)
 	if err != nil {
-		return LoginResult{}, domain.NotFound("登录提供商不存在")
+		return LoginResult{}, wrapBindError(flow, domain.NotFound("登录提供商不存在"))
 	}
 	cfg, _, err := a.oidcConfig(provider)
 	if err != nil {
-		return LoginResult{}, err
+		return LoginResult{}, wrapBindError(flow, err)
 	}
 	ext, err := a.oidc.Exchange(ctx, cfg, code, flow.CodeVerifier, flow.Nonce)
 	if err != nil {
-		return LoginResult{}, domain.NewError("oidc_exchange_failed", "OIDC 登录失败，请重试", 502)
+		return LoginResult{}, wrapBindError(flow, domain.NewError("oidc_exchange_failed", "OIDC 登录失败，请重试", 502))
 	}
 	if len(provider.AllowedEmailDomains) > 0 && !emailDomainAllowed(ext.Email, provider.AllowedEmailDomains) {
-		return LoginResult{}, domain.Forbidden("email_domain_not_allowed", "该邮箱域不允许登录此站点")
+		return LoginResult{}, wrapBindError(flow, domain.Forbidden("email_domain_not_allowed", "该邮箱域不允许登录此站点"))
 	}
-	return a.completeLogin(ctx, flow, ext, meta)
+	res, err := a.completeLogin(ctx, flow, ext, meta)
+	if err != nil {
+		return LoginResult{}, wrapBindError(flow, err)
+	}
+	return res, nil
 }
 
 func (a *AuthService) completeLogin(ctx context.Context, flow domain.AuthFlow, ext authpkg.ExternalUser, meta ClientMeta) (LoginResult, error) {
@@ -541,6 +588,7 @@ func (a *AuthService) completeLogin(ctx context.Context, flow domain.AuthFlow, e
 	if err := a.sessions.CreateSession(ctx, domain.Session{
 		TokenHash:  hash,
 		UserID:     user.ID,
+		AuthMethod: authMethodForProvider(flow.ProviderType),
 		UserAgent:  truncate(meta.UserAgent, 255),
 		IP:         truncate(meta.IP, 64),
 		CreatedAt:  now,
@@ -581,7 +629,7 @@ func (a *AuthService) loginOrCreate(ctx context.Context, flow domain.AuthFlow, e
 		}); err != nil {
 			return domain.User{}, err
 		}
-		return a.applyAutoSuperadmin(ctx, provider, ext, user)
+		return user, nil
 	default:
 		return domain.User{}, err
 	}
@@ -616,20 +664,6 @@ func (a *AuthService) bindIdentity(ctx context.Context, flow domain.AuthFlow, ex
 	return nil
 }
 
-func (a *AuthService) applyAutoSuperadmin(ctx context.Context, provider domain.ProviderType, ext authpkg.ExternalUser, user domain.User) (domain.User, error) {
-	if provider != domain.ProviderGitHub {
-		return user, nil
-	}
-	if !a.cfg.SuperadminGitHubLogins[strings.ToLower(ext.Handle)] {
-		return user, nil
-	}
-	if err := a.users.SetUserSuperadmin(ctx, user.ID, true); err != nil {
-		return domain.User{}, err
-	}
-	user.IsSuperadmin = true
-	return user, nil
-}
-
 func flowIdentityParts(flow domain.AuthFlow) (domain.ProviderType, int64, string) {
 	if flow.ProviderType == domain.ProviderGitHub {
 		return domain.ProviderGitHub, 0, authpkg.GitHubIssuer
@@ -638,6 +672,19 @@ func flowIdentityParts(flow domain.AuthFlow) (domain.ProviderType, int64, string
 		return domain.ProviderDev, 0, "dev"
 	}
 	return domain.ProviderOIDC, flow.SiteID, flow.Issuer
+}
+
+func authMethodForProvider(provider domain.ProviderType) domain.AuthMethod {
+	switch provider {
+	case domain.ProviderGitHub:
+		return domain.AuthMethodGitHub
+	case domain.ProviderOIDC:
+		return domain.AuthMethodOIDC
+	case domain.ProviderDev:
+		return domain.AuthMethodDev
+	default:
+		return domain.AuthMethodLegacy
+	}
 }
 
 func (a *AuthService) consumeFlow(ctx context.Context, state string) (domain.AuthFlow, error) {
@@ -725,7 +772,18 @@ func (a *AuthService) UnbindIdentity(ctx context.Context, userID, identityID int
 	if err != nil {
 		return err
 	}
-	if len(list) <= 1 {
+	hasLocal := false
+	if a.localCreds != nil {
+		_, credErr := a.localCreds.LocalCredentialByUserID(ctx, userID)
+		switch {
+		case credErr == nil:
+			hasLocal = true
+		case errors.Is(credErr, domain.ErrNotFound):
+		default:
+			return credErr
+		}
+	}
+	if !hasLocal && len(list) <= 1 {
 		return domain.Invalid("last_identity", "至少需要保留一个登录方式")
 	}
 	found := false
@@ -782,8 +840,9 @@ func (a *AuthService) DevLogin(ctx context.Context, name string, meta ClientMeta
 	now := a.now()
 	expires := now.Add(a.cfg.SessionTTL)
 	if err := a.sessions.CreateSession(ctx, domain.Session{
-		TokenHash: hash, UserID: user.ID, UserAgent: truncate(meta.UserAgent, 255),
-		IP: truncate(meta.IP, 64), CreatedAt: now, ExpiresAt: expires, LastSeenAt: now,
+		TokenHash: hash, UserID: user.ID, AuthMethod: domain.AuthMethodDev,
+		UserAgent: truncate(meta.UserAgent, 255),
+		IP:        truncate(meta.IP, 64), CreatedAt: now, ExpiresAt: expires, LastSeenAt: now,
 	}); err != nil {
 		return LoginResult{}, err
 	}

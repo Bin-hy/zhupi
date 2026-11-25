@@ -9,10 +9,11 @@ description: 管理端登录、站点与用户管理、审核队列、封禁、O
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/admin/auth/providers` | 可用的登录方式（本地 / GitHub / OIDC） |
-| POST | `/api/v1/admin/auth/local/login` | 本地超管账号密码登录 |
-| GET | `/api/v1/admin/auth/github/start` | 跳转 GitHub |
-| GET | `/api/v1/admin/auth/oidc/{providerId}/start` | 跳转站点 OIDC |
+| GET | `/api/v1/admin/auth/providers` | 可用的登录方式（仅本地） |
+| POST | `/api/v1/admin/auth/local/login` | 本地管理员账号密码登录 |
+
+后台只接受本地账号密码。管理 API 只接受由该接口建立的会话；GitHub / 站点 OIDC
+会话即使有效也不能访问管理接口。
 
 本地登录：
 
@@ -34,6 +35,38 @@ Content-Type: application/json
 
 `mustChangePassword=true` 时，除账号接口外管理 API 返回 `403 password_change_required`。
 
+## 管理员账号（超管）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/admin/local-admins` | 管理员列表（用户名、角色、站点、状态） |
+| POST | `/api/v1/admin/local-admins` | 新建管理员 |
+| POST | `/api/v1/admin/local-admins/open` | 为已有用户开通本地密码 |
+| POST | `/api/v1/admin/local-admins/{userId}/password/reset` | 重置密码 |
+| PUT | `/api/v1/admin/users/{userId}/superadmin` | 授予 / 撤销超级管理员 |
+
+新建示例：
+
+```http
+POST /api/v1/admin/local-admins
+Content-Type: application/json
+
+{
+  "username": "ops",
+  "displayName": "运维",
+  "initialPassword": "",
+  "isSuperadmin": false,
+  "siteIds": [1, 2]
+}
+```
+
+- `initialPassword` 留空时生成随机密码，只在本次响应返回 `generatedPassword`。
+- 新账号与重置后的账号首次登录必须改密。
+- 用户名 3–32 字符，仅字母、数字、`.`、`_`、`-`，不区分大小写唯一。
+- 重置密码会吊销目标账号全部会话；不能重置自己（请到账号设置页改密）。
+- 授予超管前，目标用户必须已开通本地密码。
+- 不能撤销或封禁最后一个可登录的超级管理员。
+
 ## 当前账号
 
 | 方法 | 路径 | 说明 |
@@ -48,8 +81,16 @@ Content-Type: application/json
 | DELETE | `/api/v1/me/sessions` | 退出所有设备 |
 | POST | `/api/v1/me/identities/github/start` | 绑定 GitHub（返回跳转地址） |
 | POST | `/api/v1/me/identities/oidc/{providerId}/start` | 绑定 OIDC（返回跳转地址） |
+| GET | `/api/v1/admin/auth/identities` | 后台：已绑定身份与可绑定提供商 |
+| POST | `/api/v1/admin/auth/identities/github/start` | 后台：发起 GitHub 绑定 |
+| POST | `/api/v1/admin/auth/identities/oidc/{providerId}/start` | 后台：发起 OIDC 绑定 |
 
-绑定接口需要同时带站点上下文（`X-Site-Key` 与 `Origin`），因为 OIDC 提供商属于站点。
+绑定接口需要同时带站点上下文（`X-Site-Key` 与 `Origin`），因为 OIDC 提供商属于站点；
+后台专用绑定接口不需要站点上下文。
+
+绑定只建立身份关联：不创建用户、不创建会话，也不能用于后台登录。绑定失败会回到
+`/admin/account#annot_bind=error&message=...`；成功后回到 `#annot_bind=ok`。
+已属于其他用户的身份会返回冲突，不做账号合并。
 
 ## 站点与用户（超管）
 

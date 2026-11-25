@@ -39,6 +39,18 @@ func (p ProviderType) Valid() bool {
 	return p == ProviderGitHub || p == ProviderOIDC || p == ProviderDev
 }
 
+// AuthMethod 记录会话的登录来源，用于区分后台本地登录与站点访客登录。
+type AuthMethod string
+
+const (
+	AuthMethodLocal  AuthMethod = "local"
+	AuthMethodGitHub AuthMethod = "github"
+	AuthMethodOIDC   AuthMethod = "oidc"
+	AuthMethodDev    AuthMethod = "dev"
+	// AuthMethodLegacy 是新增来源字段前的旧会话。
+	AuthMethodLegacy AuthMethod = "legacy"
+)
+
 type AnnotationStatus string
 
 const (

@@ -15,6 +15,7 @@ const active = computed(() => {
   if (route.path.startsWith('/sites')) return '/sites'
   if (route.path.startsWith('/moderation')) return '/moderation'
   if (route.path.startsWith('/users')) return '/users'
+  if (route.path.startsWith('/admins')) return '/admins'
   return '/'
 })
 
@@ -66,6 +67,7 @@ onMounted(() => {
           </span>
         </el-menu-item>
         <el-menu-item v-if="isSuperadmin()" index="/users">用户管理</el-menu-item>
+        <el-menu-item v-if="isSuperadmin()" index="/admins">管理员账号</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>

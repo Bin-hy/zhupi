@@ -98,7 +98,7 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 - 账号被全局封禁；
 - 换站点后使用了另一个 API/siteKey 下的 token（token 按 API + siteKey 存储）。
 
-### 本地超管密码忘了
+### 本地管理员密码忘了
 
 ```bash
 ./bin/zhupi admin password reset --username admin
@@ -106,7 +106,7 @@ ${PUBLIC_BASE_URL}/api/v1/auth/oidc/{providerId}/callback
 docker compose exec zhupi /app/zhupi admin password reset --username admin
 ```
 
-会吊销该账号全部会话。
+`--username` 可以是任意本地管理员账号；会吊销该账号全部会话。
 
 ## 审核
 
@@ -144,7 +144,8 @@ make build
 
 - 检查 `PUBLIC_BASE_URL` 与访问地址是否一致；
 - 检查反向代理是否传递了正确的 Host/协议；
-- 本地超管默认 `admin/admin`，首次登录必须改密。
+- 后台只接受本地账号密码；本地管理员默认 `admin/admin`，首次登录必须改密；
+- 升级后原 GitHub/OIDC 管理员无法登录时，请让超管在「管理员账号」为其开通本地密码。
 
 ### 修改 `.env` 不生效
 
@@ -191,7 +192,7 @@ docker compose down
 docker volume rm zhupi-data   # 破坏性
 ```
 
-重新启动会自动建表并创建本地超管。
+重新启动会自动建表并创建本地管理员。
 
 ## 开发
 

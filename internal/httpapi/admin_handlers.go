@@ -71,7 +71,7 @@ func (s *Server) handleAdminListAdmins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := PrincipalFrom(r.Context())
-	list, err := s.admin.ListSiteAdmins(r.Context(), p, siteID)
+	list, err := s.admin.ListSiteAdminsView(r.Context(), p, siteID)
 	if err != nil {
 		s.writeErr(w, r, err)
 		return

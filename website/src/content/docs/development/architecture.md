@@ -55,8 +55,8 @@ SQLite 开启 WAL、`busy_timeout(5000)` 与外键。
 | `site_origins` | 站点来源白名单 |
 | `users` | 平台用户：展示名、头像、状态、是否超管 |
 | `identities` | 身份：provider / siteId / issuer / subject 唯一 |
-| `sessions` | 会话：只存 token 的 SHA-256、UA、IP、过期时间 |
-| `local_credentials` | 本地超管：bcrypt 哈希、强制改密标记 |
+| `sessions` | 会话：只存 token 的 SHA-256、UA、IP、登录来源、过期时间 |
+| `local_credentials` | 本地管理员凭据：bcrypt 哈希、强制改密标记；一个用户一条 |
 | `site_admins` | 站点管理员 |
 | `site_bans` | 站点封禁 |
 | `oidc_providers` | 站点 OIDC：client secret 为 AES-GCM 密文 |
@@ -97,7 +97,8 @@ SDK 在选区上生成 `TextQuoteSelector`（exact/prefix/suffix）与可选字�
 - `state` 在数据库中只存哈希，并带过期时间，定时清理。
 - 会话 token 只在创建时返回一次，数据库只存 SHA-256。
 - 全局封禁会在会话认证与本地登录时被拒绝；站点封禁只拦截该站点的写操作。
-- 本地超管密码使用 bcrypt；首次登录（`mustChangePassword`）会阻止访问管理 API。
+- 本地管理员密码使用 bcrypt；首次登录（`mustChangePassword`）会阻止访问管理 API。
+- 会话记录登录来源；管理 API 只接受本地密码登录建立的会话，站点 API 接受任意有效会话。
 
 ## 审核流转
 

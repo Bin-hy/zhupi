@@ -1,10 +1,15 @@
 import { http } from './client'
 import type {
   AdminAuthProviders,
+  AdminIdentities,
   Annotation,
   Comment,
+  CreateLocalAdminInput,
   CreateSiteInput,
+  LocalAdminAccount,
+  LocalAdminResult,
   Me,
+  OpenLocalCredentialInput,
   Overview,
   Provider,
   ProviderInput,
@@ -35,12 +40,44 @@ export const api = {
     ),
   me: () => http.request<Me>('/me'),
   mySites: () => http.request<{ sites: Site[] }>('/me/sites'),
+  adminIdentities: () => http.request<AdminIdentities>('/admin/auth/identities'),
+  bindGitHub: () =>
+    http.request<{ redirectUrl: string }>('/admin/auth/identities/github/start', { method: 'POST' }),
+  bindOIDC: (providerId: number) =>
+    http.request<{ redirectUrl: string }>(`/admin/auth/identities/oidc/${providerId}/start`, {
+      method: 'POST',
+    }),
+  unbindIdentity: (id: number) =>
+    http.request<void>(`/me/identities/${id}`, { method: 'DELETE' }),
   changePassword: (currentPassword: string, newPassword: string) =>
     http.request<void>('/me/password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   logout: () => http.request<void>('/auth/logout', { method: 'POST' }),
+
+  // 管理员账号
+  listLocalAdmins: () => http.request<{ admins: LocalAdminAccount[] }>('/admin/local-admins'),
+  createLocalAdmin: (input: CreateLocalAdminInput) =>
+    http.request<LocalAdminResult>('/admin/local-admins', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  openLocalCredential: (input: OpenLocalCredentialInput) =>
+    http.request<LocalAdminResult>('/admin/local-admins/open', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  resetLocalPassword: (userId: number, password: string) =>
+    http.request<{ generatedPassword: string }>(`/admin/local-admins/${userId}/password/reset`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  setSuperadmin: (userId: number, isSuperadmin: boolean) =>
+    http.request<void>(`/admin/users/${userId}/superadmin`, {
+      method: 'PUT',
+      body: JSON.stringify({ isSuperadmin }),
+    }),
 
   // 概览
   overview: () => http.request<Overview>('/admin/overview'),

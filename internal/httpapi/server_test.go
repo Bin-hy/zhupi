@@ -95,6 +95,52 @@ func (e *testEnv) login(t *testing.T, name string) string {
 	return out.Token
 }
 
+const localTestPassword = "local-test-pass"
+
+// localize 为现有用户开通本地密码并返回本地会话，用户 ID 与角色不变。
+func (e *testEnv) localize(t *testing.T, token string) string {
+	t.Helper()
+	resp, body := e.do(t, http.MethodGet, "/api/v1/me", token, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("me: %d %s", resp.StatusCode, body)
+	}
+	var me struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal(body, &me)
+	if me.ID == 0 {
+		t.Fatalf("missing user id: %s", body)
+	}
+	username := "local-" + itoa(me.ID)
+	hash, err := authpkg.HashPassword(localTestPassword)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if err := e.store.CreateLocalCredential(context.Background(), domain.LocalCredential{
+		UserID: me.ID, Username: username, PasswordHash: hash,
+	}); err != nil {
+		cred, getErr := e.store.LocalCredentialByUserID(context.Background(), me.ID)
+		if getErr != nil {
+			t.Fatalf("create/fetch local credential: %v / %v", err, getErr)
+		}
+		username = cred.Username
+	}
+	resp, body = e.do(t, http.MethodPost, "/api/v1/admin/auth/local/login", "", "", "", map[string]any{
+		"username": username, "password": localTestPassword,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local login: %d %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(body, &out)
+	if out.Token == "" {
+		t.Fatal("empty local token")
+	}
+	return out.Token
+}
+
 func (e *testEnv) do(t *testing.T, method, path, token, siteKey, origin string, body any) (*http.Response, []byte) {
 	t.Helper()
 	var reader io.Reader
@@ -206,6 +252,7 @@ func TestModerationApproveShowsFirstComment(t *testing.T) {
 	e := newTestEnv(t)
 	site := e.site(t, "b", "http://b.test", domain.ModerationPre)
 	alice := e.login(t, "alice")
+	alice = e.localize(t, alice)
 	_ = e.store.SetUserSuperadmin(context.Background(), 1, true)
 
 	_, body := e.do(t, http.MethodPost, "/api/v1/annotations", alice, site.Key, "http://b.test", map[string]any{
@@ -235,6 +282,8 @@ func TestAdminQueueCommentContextCountsAndSearch(t *testing.T) {
 	site := e.site(t, "pre", "http://pre.test", domain.ModerationPre)
 	alice := e.login(t, "alice")
 	bob := e.login(t, "bob")
+	alice = e.localize(t, alice)
+	bob = e.localize(t, bob)
 	_ = e.store.SetUserSuperadmin(context.Background(), 1, true)
 
 	a := e.createAnnotation(t, alice, site, "http://pre.test", "批注正文", "被引用的原文")
@@ -353,6 +402,8 @@ func TestSiteAdminScopeAndBan(t *testing.T) {
 	siteB := e.site(t, "b", "http://b.test", domain.ModerationPost)
 	alice := e.login(t, "alice")
 	bob := e.login(t, "bob")
+	alice = e.localize(t, alice)
+	bob = e.localize(t, bob)
 	_ = e.store.SetUserSuperadmin(context.Background(), 1, true) // alice = 1
 
 	// 超管把 bob(=2) 设为站点 B 管理员。
@@ -587,6 +638,7 @@ func TestAnnotationSearchRespectsCommentVisibility(t *testing.T) {
 	site := e.site(t, "pre", "http://pre.test", domain.ModerationPre)
 	alice := e.login(t, "alice")
 	bob := e.login(t, "bob")
+	alice = e.localize(t, alice)
 	_ = e.store.SetUserSuperadmin(context.Background(), 1, true)
 
 	a := e.createAnnotation(t, alice, site, "http://pre.test", "批注正文", "引用原文")
@@ -714,6 +766,9 @@ func TestAdminConsoleAPIs(t *testing.T) {
 	charlie, _ := e.loginUser(t, "charlie")
 	_ = e.store.SetUserSuperadmin(context.Background(), aliceID, true)
 	_ = e.store.AddSiteAdmin(context.Background(), domain.SiteAdmin{SiteID: siteB.ID, UserID: bobID, GrantedBy: aliceID})
+	alice = e.localize(t, alice)
+	bob = e.localize(t, bob)
+	charlie = e.localize(t, charlie)
 
 	// 站点管理员范围
 	resp, body := e.do(t, http.MethodGet, "/api/v1/me/sites", alice, "", "", nil)
@@ -780,30 +835,17 @@ func TestAdminConsoleAPIs(t *testing.T) {
 		t.Fatalf("charlie overview = %+v", charlieOverview.Counts)
 	}
 
-	// 管理端登录方式：包含启用 OIDC 提供商
-	if _, err := e.store.CreateProvider(context.Background(), domain.OIDCProvider{
-		SiteID: siteA.ID, Name: "SSO", Issuer: "https://sso.test", ClientID: "cid",
-		ClientSecretCipher: []byte("cipher"), Scopes: []string{"openid"}, Enabled: true,
-	}); err != nil {
-		t.Fatalf("create provider: %v", err)
-	}
+	// 管理端登录方式：仅本地
 	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/auth/providers", "", "", "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin providers: %d %s", resp.StatusCode, body)
 	}
 	var providers struct {
-		GitHub    bool `json:"github"`
-		Providers []struct {
-			SiteName string `json:"siteName"`
-			Issuer   string `json:"issuer"`
-		} `json:"providers"`
+		Local bool `json:"local"`
 	}
 	_ = json.Unmarshal(body, &providers)
-	if providers.GitHub || len(providers.Providers) != 1 || providers.Providers[0].SiteName != "a" {
+	if !providers.Local {
 		t.Fatalf("providers = %+v", providers)
-	}
-	if bytes.Contains(body, []byte("cipher")) {
-		t.Fatalf("secret leaked: %s", body)
 	}
 
 	// 站点封禁列表

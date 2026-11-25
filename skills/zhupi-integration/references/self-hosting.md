@@ -65,8 +65,7 @@ export PUBLIC_BASE_URL=http://127.0.0.1:8080   # use the external HTTPS URL in p
 | `PUBLIC_BASE_URL` | none | External absolute URL used for OAuth/OIDC callbacks |
 | `SECRET_KEY` | required | 32-byte hex/base64 key; encrypts stored OIDC secrets |
 | `SESSION_TTL_HOURS` | `720` | Session lifetime |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | empty | Global GitHub OAuth |
-| `SUPERADMIN_GITHUB_LOGINS` | empty | Comma-separated GitHub logins promoted to superadmin on login |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | empty | Global GitHub OAuth (visitor login only) |
 | `LOCAL_ADMIN_USERNAME` / `LOCAL_ADMIN_PASSWORD` | `admin` / `admin` | Bootstrap local admin for the console; password change is forced |
 | `LOCAL_ADMIN_RESET_PASSWORD` | `0` | Set `1` once to reset the local admin password and revoke its sessions |
 | `TRUST_PROXY` | `0` in the binary, `1` in Compose | Read the first `X-Forwarded-For` hop |
@@ -113,11 +112,16 @@ Set `TRUST_PROXY=1` only when a trusted proxy overwrites `X-Forwarded-For`. Othe
 
 Unset credentials hide the GitHub provider from `GET /api/v1/site-config`, so the SDK shows no GitHub login entry.
 
-Promote an account:
+Promote an existing local admin (or use the console's Admin Accounts page):
 
 ```bash
-./bin/zhupi admin promote --github-login <login>
 ./bin/zhupi admin promote --user-id <id>
+```
+
+Open a local password for an existing user:
+
+```bash
+./bin/zhupi admin users open --user-id <id> --username <name>
 ```
 
 ### Site-level OIDC

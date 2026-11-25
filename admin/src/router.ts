@@ -6,6 +6,7 @@ import SitesView from './views/SitesView.vue'
 import SiteDetailView from './views/SiteDetailView.vue'
 import ModerationView from './views/ModerationView.vue'
 import UsersView from './views/UsersView.vue'
+import AdminsView from './views/AdminsView.vue'
 import AccountView from './views/AccountView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import { auth, canAccessSite, hasToken, isSuperadmin, loadSession, resetSession } from './stores/auth'
@@ -21,6 +22,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'sites/:id', name: 'site-detail', component: SiteDetailView },
       { path: 'moderation', name: 'moderation', component: ModerationView },
       { path: 'users', name: 'users', component: UsersView, meta: { superadmin: true } },
+      { path: 'admins', name: 'admins', component: AdminsView, meta: { superadmin: true } },
       { path: 'account', name: 'account', component: AccountView },
     ],
   },

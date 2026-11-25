@@ -101,11 +101,8 @@ export DEV_LOGIN=1   # 仅本地开发
 
 - 地址：`http://127.0.0.1:8080/admin/`
 - 默认本地超管：`admin` / `admin`（首次登录强制改密）
-- 也可以先配置 GitHub OAuth，登录后再提升为超管：
-
-```bash
-./bin/zhupi admin promote --github-login <你的 GitHub 登录名>
-```
+- 进入「管理员账号」可新建管理员，或为已有用户开通本地密码；GitHub / 站点 OIDC
+  只用于站点访客登录与管理员身份绑定，不能直接登录后台。
 
 管理后台包含：概览、站点管理、站点管理员、全局用户封禁、审核工作台、OIDC 提供商。
 

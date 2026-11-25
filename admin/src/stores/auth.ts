@@ -40,19 +40,6 @@ export function canAccessSite(id: number): boolean {
   return isSuperadmin() || auth.sites.some((site) => site.id === id)
 }
 
-function redirectStart(path: string): void {
-  const returnTo = window.location.href.split('#')[0]
-  window.location.href = `${path}?redirect=${encodeURIComponent(returnTo)}`
-}
-
-export function loginGitHub(): void {
-  redirectStart('/api/v1/admin/auth/github/start')
-}
-
-export function loginOIDC(providerId: number): void {
-  redirectStart(`/api/v1/admin/auth/oidc/${providerId}/start`)
-}
-
 export async function localLogin(username: string, password: string): Promise<boolean> {
   const res = await api.localLogin(username, password)
   http.setToken(res.token)

@@ -3,7 +3,8 @@ import { chromium } from 'playwright-core'
 const CHROME =
   process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const BASE = (process.env.ADMIN_BASE || 'http://127.0.0.1:18090').replace(/\/+$/, '')
-const ADMIN_NAME = process.env.DEV_ADMIN_NAME || 'alice'
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin-e2e-pass'
 const TOKEN_KEY = 'annotation-admin:token'
 
 async function devLogin(name) {
@@ -16,9 +17,34 @@ async function devLogin(name) {
   return res.json()
 }
 
-const admin = await devLogin(ADMIN_NAME)
+async function localLogin(username, password) {
+  const res = await fetch(`${BASE}/api/v1/admin/auth/local/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!res.ok) throw new Error(`local login failed: ${res.status}`)
+  return res.json()
+}
+
+async function changePassword(token, currentPassword, newPassword) {
+  const res = await fetch(`${BASE}/api/v1/me/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+  if (!res.ok) throw new Error(`change password failed: ${res.status}`)
+}
+
+let admin = await localLogin(ADMIN_USERNAME, ADMIN_PASSWORD)
+let adminPassword = ADMIN_PASSWORD
+if (admin.mustChangePassword) {
+  adminPassword = `${ADMIN_PASSWORD}-new`
+  await changePassword(admin.token, ADMIN_PASSWORD, adminPassword)
+  admin = await localLogin(ADMIN_USERNAME, adminPassword)
+}
 if (!admin.user?.isSuperadmin) {
-  throw new Error(`用户 ${ADMIN_NAME} 不是超级管理员，请先执行 admin promote`)
+  throw new Error(`账号 ${ADMIN_USERNAME} 不是超级管理员`)
 }
 
 const stamp = Date.now()
@@ -175,10 +201,29 @@ try {
   await page.getByRole('button', { name: '知道了' }).click()
   console.log('7) siteKey 轮换完成')
 
+  await page.goto(`${BASE}/admin/admins`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.waitForSelector('text=管理员账号', { timeout: 30000 })
+  await page.getByRole('button', { name: '新建管理员' }).click()
+  const adminDialog = page.locator('.el-dialog')
+  await adminDialog.waitFor({ timeout: 15000 })
+  await adminDialog.locator('input').nth(0).fill(`e2e-admin-${stamp}`)
+  await adminDialog.locator('input[type="password"]').fill('e2e-admin-pass-1')
+  await adminDialog.getByRole('button', { name: '创建' }).click()
+  await page.locator('.el-table__row', { hasText: `e2e-admin-${stamp}` }).waitFor({ timeout: 30000 })
+  console.log('7b) 管理员创建完成')
+
+  await page.goto(`${BASE}/admin/account`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+  await page.waitForSelector('text=登录身份', { timeout: 30000 })
+  console.log('7c) 账号身份区渲染正常')
+
   const loginPage = await browser.newPage()
   await loginPage.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   await loginPage.waitForSelector('text=朱批 · Zhupi', { timeout: 30000 })
-  console.log('8) 登录页渲染正常')
+  await loginPage.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
+  await loginPage.locator('input[autocomplete="current-password"]').fill(adminPassword)
+  await loginPage.getByRole('button', { name: '登录' }).click()
+  await loginPage.waitForSelector('.stat-grid', { timeout: 30000 })
+  console.log('8) 登录页本地登录正常')
 
   console.log('ADMIN E2E PASS')
 } finally {

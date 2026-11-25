@@ -2,7 +2,9 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
-import type { SiteAdmin } from '../api/types'
+import type { LocalAdminResult, SiteAdmin } from '../api/types'
+import GeneratedPasswordDialog from './GeneratedPasswordDialog.vue'
+import LocalAdminFormDialog from './LocalAdminFormDialog.vue'
 import { formatTime } from '../utils/format'
 
 const props = defineProps<{ siteId: number }>()
@@ -10,6 +12,11 @@ const admins = ref<SiteAdmin[]>([])
 const loading = ref(false)
 const error = ref('')
 const userId = ref<number | undefined>()
+
+const openVisible = ref(false)
+const openUser = ref<{ id: number; displayName: string } | null>(null)
+const passwordVisible = ref(false)
+const passwordValue = ref('')
 
 async function load(): Promise<void> {
   loading.value = true
@@ -56,6 +63,23 @@ async function remove(admin: any): Promise<void> {
   }
 }
 
+function openCredential(admin: any): void {
+  openUser.value = {
+    id: admin.userId,
+    displayName: admin.displayName || `#${admin.userId}`,
+  }
+  openVisible.value = true
+}
+
+function onOpenSuccess(result: LocalAdminResult): void {
+  ElMessage.success('已开通本地密码')
+  if (result.generatedPassword) {
+    passwordValue.value = result.generatedPassword
+    passwordVisible.value = true
+  }
+  void load()
+}
+
 onMounted(load)
 </script>
 
@@ -68,8 +92,22 @@ onMounted(load)
     </div>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <el-table v-loading="loading" :data="admins" border>
-      <el-table-column prop="userId" label="用户 ID" width="120" />
-      <el-table-column prop="grantedBy" label="授予者" width="120" />
+      <el-table-column prop="userId" label="用户 ID" width="110" />
+      <el-table-column prop="displayName" label="名称" min-width="150" />
+      <el-table-column label="本地账号" width="170">
+        <template #default="{ row }">
+          <template v-if="row.localUsername">
+            <span>{{ row.localUsername }}</span>
+            <el-tag v-if="row.mustChangePassword" type="danger" size="small" class="tag">
+              待改密
+            </el-tag>
+          </template>
+          <el-button v-else link type="primary" @click="openCredential(row)">
+            开通本地密码
+          </el-button>
+        </template>
+      </el-table-column>
+      <el-table-column prop="grantedBy" label="授予者" width="110" />
       <el-table-column label="授予时间" width="180">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
@@ -80,5 +118,21 @@ onMounted(load)
       </el-table-column>
     </el-table>
     <el-empty v-if="!loading && admins.length === 0" description="还没有站点管理员" />
+
+    <LocalAdminFormDialog
+      v-model="openVisible"
+      mode="open"
+      :user="openUser"
+      :users="[]"
+      :sites="[]"
+      @success="onOpenSuccess"
+    />
+    <GeneratedPasswordDialog v-model="passwordVisible" :password="passwordValue" />
   </div>
 </template>
+
+<style scoped>
+.tag {
+  margin-left: 6px;
+}
+</style>

@@ -54,6 +54,9 @@ type LocalCredentialRepo interface {
 	LocalCredentialByUserID(ctx context.Context, userID int64) (domain.LocalCredential, error)
 	CountLocalCredentials(ctx context.Context) (int, error)
 	UpdateLocalCredentialPassword(ctx context.Context, userID int64, hash string, mustChange bool) error
+	ListLocalAdmins(ctx context.Context) ([]domain.LocalAdminAccount, error)
+	CountActiveSuperadminCredentials(ctx context.Context) (int, error)
+	CreateLocalAdmin(ctx context.Context, u domain.User, c domain.LocalCredential, siteIDs []int64, grantedBy int64) (domain.User, error)
 }
 
 type AuthFlowRepo interface {

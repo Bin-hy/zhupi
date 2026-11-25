@@ -44,7 +44,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 		[站点管理 →](/sites/manage/)
 	</Card>
 	<Card title="登录与审核" icon="comment">
-		GitHub OAuth、每站点 OIDC、本地超管兜底；先发后审 / 先审后发两种模式。
+		GitHub OAuth、每站点 OIDC 服务站点访客；管理后台仅本地账号密码。先发后审 / 先审后发两种模式。
 		[登录与身份 →](/sites/authentication/)
 	</Card>
 	<Card title="API 与 CLI" icon="setting">
@@ -66,7 +66,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 | 多站点 | 一个实例托管多个站点，按 siteKey 与 Origin 白名单隔离 |
 | 可嵌入 | Shadow DOM UI，不污染宿主样式；支持 `<script>` 与 ESM |
 | 自托管友好 | 单 Go 二进制，内嵌 SDK 与管理后台，SQLite 单文件存储 |
-| 登录 | 全局 GitHub OAuth + 每站点 OIDC + 本地超管兜底 |
+| 登录 | 站点访客：GitHub OAuth + 每站点 OIDC；管理后台：本地账号密码 |
 | 治理 | 超管 / 站点管理员两级权限，审核队列、封禁、先审后发 |
 | MIT | 代码与 SDK 均为 MIT 许可 |
 

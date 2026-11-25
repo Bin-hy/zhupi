@@ -1,14 +1,119 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
+import type { BindableProvider, Identity } from '../api/types'
 import { auth, loadSession, mustChangePassword } from '../stores/auth'
 
 const router = useRouter()
 const form = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
 const submitting = ref(false)
 const forced = computed(() => mustChangePassword())
+
+const identities = ref<Identity[]>([])
+const bindable = ref<{ github: boolean; providers: BindableProvider[] }>({
+  github: false,
+  providers: [],
+})
+const identitiesLoading = ref(false)
+const binding = ref('')
+
+const groupedProviders = computed(() => {
+  const groups = new Map<string, BindableProvider[]>()
+  for (const provider of bindable.value.providers) {
+    const key = provider.siteName || `#${provider.siteId}`
+    const list = groups.get(key) || []
+    list.push(provider)
+    groups.set(key, list)
+  }
+  return Array.from(groups, ([site, providers]) => ({ site, providers }))
+})
+
+async function loadIdentities(): Promise<void> {
+  identitiesLoading.value = true
+  try {
+    const res = await api.adminIdentities()
+    identities.value = res.identities || []
+    bindable.value = {
+      github: res.bindable.github,
+      providers: res.bindable.providers || [],
+    }
+  } catch (err: any) {
+    ElMessage.error(err?.message || '加载登录身份失败')
+  } finally {
+    identitiesLoading.value = false
+  }
+}
+
+function identityLabel(identity: Identity): string {
+  if (identity.provider === 'github') return 'GitHub'
+  return identity.issuer || identity.provider
+}
+
+function identityDetail(identity: Identity): string {
+  return identity.handle || identity.email || identity.subject
+}
+
+async function bindGitHub(): Promise<void> {
+  binding.value = 'github'
+  try {
+    const res = await api.bindGitHub()
+    window.location.href = res.redirectUrl
+  } catch (err: any) {
+    ElMessage.error(err?.message || '发起绑定失败')
+    binding.value = ''
+  }
+}
+
+async function bindOIDC(providerId: number): Promise<void> {
+  binding.value = `oidc-${providerId}`
+  try {
+    const res = await api.bindOIDC(providerId)
+    window.location.href = res.redirectUrl
+  } catch (err: any) {
+    ElMessage.error(err?.message || '发起绑定失败')
+    binding.value = ''
+  }
+}
+
+async function unbind(identity: Identity): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      `解绑 ${identityLabel(identity)}（${identityDetail(identity)}）？`,
+      '确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await api.unbindIdentity(identity.id)
+    ElMessage.success('已解绑')
+    await loadIdentities()
+  } catch (err: any) {
+    ElMessage.error(err?.message || '解绑失败')
+  }
+}
+
+function handleBindResult(): void {
+  const hash = window.location.hash.replace(/^#/, '')
+  if (!hash) return
+  const params = new URLSearchParams(hash)
+  const status = params.get('annot_bind')
+  if (!status) return
+  if (status === 'ok') {
+    ElMessage.success('身份绑定成功')
+  } else {
+    ElMessage.error(params.get('message') || '身份绑定失败')
+  }
+  window.history.replaceState(null, '', window.location.pathname + window.location.search)
+}
+
+onMounted(async () => {
+  handleBindResult()
+  await loadIdentities()
+})
 
 async function onSubmit(): Promise<void> {
   if (!form.currentPassword) {
@@ -112,6 +217,51 @@ async function onSubmit(): Promise<void> {
         description="当前账号未设置本地密码（通过 GitHub / OIDC 登录）"
       />
     </el-card>
+
+    <el-card shadow="never" class="card">
+      <template #header>
+        <span>登录身份</span>
+      </template>
+      <div v-loading="identitiesLoading">
+        <div v-if="identities.length" class="identity-list">
+          <div v-for="identity in identities" :key="identity.id" class="identity-row">
+            <div>
+              <strong>{{ identityLabel(identity) }}</strong>
+              <span class="muted"> {{ identityDetail(identity) }}</span>
+            </div>
+            <el-button link type="danger" @click="unbind(identity)">解绑</el-button>
+          </div>
+        </div>
+        <el-empty v-else description="尚未绑定任何外部身份" :image-size="60" />
+      </div>
+
+      <div class="bind-section">
+        <p class="muted">绑定 GitHub 或站点 OIDC 身份，仅用于身份关联，不参与后台登录。</p>
+        <div class="bind-actions">
+          <el-button
+            v-if="bindable.github"
+            :loading="binding === 'github'"
+            @click="bindGitHub"
+          >
+            绑定 GitHub
+          </el-button>
+          <div v-for="group in groupedProviders" :key="group.site" class="bind-group">
+            <span class="muted">{{ group.site }}</span>
+            <el-button
+              v-for="provider in group.providers"
+              :key="provider.id"
+              :loading="binding === `oidc-${provider.id}`"
+              @click="bindOIDC(provider.id)"
+            >
+              绑定 {{ provider.name }}
+            </el-button>
+          </div>
+        </div>
+        <p v-if="!bindable.github && !bindable.providers.length" class="muted">
+          当前没有可绑定的提供商
+        </p>
+      </div>
+    </el-card>
   </div>
 </template>
 
@@ -134,5 +284,33 @@ async function onSubmit(): Promise<void> {
 }
 .form {
   max-width: 480px;
+}
+.card {
+  margin-top: 16px;
+}
+.identity-list {
+  display: flex;
+  flex-direction: column;
+}
+.identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.bind-section {
+  margin-top: 16px;
+}
+.bind-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bind-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 </style>

@@ -34,7 +34,8 @@ openssl rand -hex 32
 | --- | --- |
 | `GITHUB_CLIENT_ID` | GitHub OAuth App 的 Client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth App 的 Client Secret |
-| `SUPERADMIN_GITHUB_LOGINS` | 逗号分隔的 GitHub 登录名；命中用户登录后自动提升为超管 |
+
+GitHub 仅用于站点访客登录，不会自动提升超管，也不能登录管理后台。
 
 未配置 `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` 时，GitHub 登录入口不会出现在站点配置中。回调地址：
 
@@ -42,16 +43,19 @@ openssl rand -hex 32
 ${PUBLIC_BASE_URL}/api/v1/auth/github/callback
 ```
 
-## 本地超级管理员
+## 管理后台本地账号
+
+管理后台只接受本地账号密码；下面的变量只负责首次启动的引导账号。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `LOCAL_ADMIN_USERNAME` | `admin` | 本地超管用户名 |
+| `LOCAL_ADMIN_USERNAME` | `admin` | 引导超管用户名 |
 | `LOCAL_ADMIN_PASSWORD` | `admin` | 初始密码；等于 `admin` 时首次登录强制改密 |
 | `LOCAL_ADMIN_RESET_PASSWORD` | `0` | 设为 `1` 时，启动后用上面的密码重置并吊销会话 |
 | `LOCAL_LOGIN_RATE_PER_MIN` | `10` | 本地登录每 IP 每分钟限流 |
 
 - 初始化只在数据库中不存在本地凭据时执行；重启不会覆盖后台改过的密码。
+- 更多管理员请由超管在后台「管理员账号」创建，或为已有用户开通本地密码。
 - 忘记密码时在服务器上重置：
 
 ```bash

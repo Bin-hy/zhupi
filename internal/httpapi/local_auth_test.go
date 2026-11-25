@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
 func TestLocalAdminLoginAndForcedPasswordChange(t *testing.T) {
@@ -108,5 +110,43 @@ func TestLocalAdminLoginAndForcedPasswordChange(t *testing.T) {
 	_ = json.Unmarshal(body, &login)
 	if login.MustChangePassword {
 		t.Fatalf("mustChangePassword should be false: %s", body)
+	}
+}
+
+func TestAdminAPIsRequireLocalSession(t *testing.T) {
+	e := newTestEnv(t)
+	site := e.site(t, "a", "http://a.test", domain.ModerationPost)
+	visitor := e.login(t, "visitor")
+
+	for _, path := range []string{"/api/v1/admin/auth/github/start", "/api/v1/admin/auth/oidc/1/start"} {
+		resp, _ := e.do(t, http.MethodGet, path, "", "", "", nil)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("removed admin login %s status = %d", path, resp.StatusCode)
+		}
+	}
+
+	resp, body := e.do(t, http.MethodGet, "/api/v1/admin/overview", visitor, "", "", nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("visitor admin overview: %d %s", resp.StatusCode, body)
+	}
+	var blocked struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(body, &blocked)
+	if blocked.Error.Code != "admin_local_auth_required" {
+		t.Fatalf("unexpected error code: %s", body)
+	}
+
+	resp, body = e.do(t, http.MethodGet, "/api/v1/annotations?page=%2Fdoc", visitor, site.Key, "http://a.test", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("visitor site api: %d %s", resp.StatusCode, body)
+	}
+
+	local := e.localize(t, visitor)
+	resp, body = e.do(t, http.MethodGet, "/api/v1/admin/overview", local, "", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local admin overview: %d %s", resp.StatusCode, body)
 	}
 }

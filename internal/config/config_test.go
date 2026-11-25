@@ -34,9 +34,6 @@ func TestLoad(t *testing.T) {
 	if c.SessionTTL != 24*time.Hour {
 		t.Fatalf("session ttl = %v", c.SessionTTL)
 	}
-	if !c.SuperadminGitHubLogins["alice"] || !c.SuperadminGitHubLogins["bob"] {
-		t.Fatalf("superadmins = %+v", c.SuperadminGitHubLogins)
-	}
 	if !c.DevLogin || !c.TrustProxy {
 		t.Fatalf("flags not loaded: %+v", c)
 	}

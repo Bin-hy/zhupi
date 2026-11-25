@@ -25,7 +25,7 @@ description: 朱批的安全模型、密钥与令牌、来源白名单、XSS/CSR
 | --- | --- |
 | `SECRET_KEY` | 环境变量；32 字节 |
 | OIDC client secret | AES-256-GCM 加密后入库 |
-| 本地超管密码 | bcrypt 哈希 |
+| 本地管理员密码 | bcrypt 哈希 |
 | 会话 token | 数据库只存 SHA-256 |
 | OAuth state | 数据库只存哈希，带过期时间 |
 
@@ -34,7 +34,8 @@ description: 朱批的安全模型、密钥与令牌、来源白名单、XSS/CSR
 - `SECRET_KEY` 泄露等同于 OIDC client secret 泄露；更换密钥会导致已有 OIDC secret 无法解密。
 - 备份数据库时必须同时妥善保管 `SECRET_KEY`。
 - 不要把密钥写入镜像、仓库、前端变量或日志。
-- 本地超管默认 `admin/admin` 只用于首次启动；生产必须改密，或只依赖 GitHub/OIDC。
+- 本地管理员默认 `admin/admin` 只用于首次启动；生产必须改密。
+- 后台只接受本地密码会话；GitHub / 站点 OIDC 会话不能访问管理 API。
 
 ## 客户端令牌与 XSS
 

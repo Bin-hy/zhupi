@@ -51,6 +51,7 @@ type Session struct {
 	ID         int64      `json:"id"`
 	TokenHash  string     `json:"-"`
 	UserID     int64      `json:"-"`
+	AuthMethod AuthMethod `json:"-"`
 	UserAgent  string     `json:"userAgent"`
 	IP         string     `json:"ip"`
 	CreatedAt  time.Time  `json:"createdAt"`
@@ -171,6 +172,18 @@ type LocalCredential struct {
 	MustChangePassword bool      `json:"mustChangePassword"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+// LocalAdminAccount 是后台管理员账号的读模型，不包含密码哈希。
+type LocalAdminAccount struct {
+	UserID             int64      `json:"userId"`
+	Username           string     `json:"username"`
+	DisplayName        string     `json:"displayName"`
+	Status             UserStatus `json:"status"`
+	IsSuperadmin       bool       `json:"isSuperadmin"`
+	MustChangePassword bool       `json:"mustChangePassword"`
+	SiteIDs            []int64    `json:"siteIds"`
+	CreatedAt          time.Time  `json:"createdAt"`
 }
 
 func (p Principal) CanModerateSite(siteID int64) bool {

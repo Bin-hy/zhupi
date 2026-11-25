@@ -23,16 +23,14 @@ type Config struct {
 	LocalAdminUsername      string
 	LocalAdminPassword      string
 	LocalAdminResetPassword bool
-	// SuperadminGitHubLogins 命中时，该 GitHub 用户登录后自动成为超级管理员。
-	SuperadminGitHubLogins map[string]bool
-	TrustProxy             bool
-	AdminOrigins           []string
-	DevLogin               bool
-	AllowMissingOrigin     bool
-	ReadRatePerMin         int
-	WriteRatePerMin        int
-	WriteUserRatePerMin    int
-	LocalLoginRatePerMin   int
+	TrustProxy              bool
+	AdminOrigins            []string
+	DevLogin                bool
+	AllowMissingOrigin      bool
+	ReadRatePerMin          int
+	WriteRatePerMin         int
+	WriteUserRatePerMin     int
+	LocalLoginRatePerMin    int
 }
 
 func Load() (*Config, error) {
@@ -45,7 +43,6 @@ func Load() (*Config, error) {
 		LocalAdminUsername:      getenv("LOCAL_ADMIN_USERNAME", "admin"),
 		LocalAdminPassword:      getenv("LOCAL_ADMIN_PASSWORD", "admin"),
 		LocalAdminResetPassword: getenv("LOCAL_ADMIN_RESET_PASSWORD", "") == "1",
-		SuperadminGitHubLogins:  map[string]bool{},
 		TrustProxy:              getenv("TRUST_PROXY", "") == "1",
 		DevLogin:                getenv("DEV_LOGIN", "") == "1",
 		AllowMissingOrigin:      getenv("ALLOW_MISSING_ORIGIN", "") == "1",
@@ -67,9 +64,6 @@ func Load() (*Config, error) {
 	}
 	c.SessionTTL = time.Duration(hours) * time.Hour
 
-	for _, name := range splitCSV(os.Getenv("SUPERADMIN_GITHUB_LOGINS")) {
-		c.SuperadminGitHubLogins[strings.ToLower(name)] = true
-	}
 	for _, origin := range splitCSV(os.Getenv("ADMIN_ORIGINS")) {
 		c.AdminOrigins = append(c.AdminOrigins, strings.TrimRight(origin, "/"))
 	}

@@ -56,8 +56,9 @@ func (s *Server) Handler() http.Handler {
 	// 管理端登录（公开）
 	mux.Handle("GET /api/v1/admin/auth/providers", chain(http.HandlerFunc(s.handleAdminProviders), s.readLimit))
 	mux.Handle("POST /api/v1/admin/auth/local/login", chain(http.HandlerFunc(s.handleLocalLogin), s.loginLimit))
-	mux.Handle("GET /api/v1/admin/auth/github/start", chain(http.HandlerFunc(s.handleAdminGitHubStart), s.readLimit))
-	mux.Handle("GET /api/v1/admin/auth/oidc/{providerID}/start", chain(http.HandlerFunc(s.handleAdminOIDCStart), s.readLimit))
+	mux.Handle("GET /api/v1/admin/auth/identities", chain(http.HandlerFunc(s.handleAdminIdentities), s.requireAuth, s.requireLocalSession, s.readLimit))
+	mux.Handle("POST /api/v1/admin/auth/identities/github/start", chain(http.HandlerFunc(s.handleAdminBindGitHubStart), s.requireAuth, s.requireLocalSession, s.readLimit))
+	mux.Handle("POST /api/v1/admin/auth/identities/oidc/{providerID}/start", chain(http.HandlerFunc(s.handleAdminBindOIDCStart), s.requireAuth, s.requireLocalSession, s.readLimit))
 
 	// 站点公共接口
 	mux.Handle("GET /api/v1/site-config", s.publicSite(s.handleSiteConfig))
@@ -91,17 +92,24 @@ func (s *Server) Handler() http.Handler {
 		chain(http.HandlerFunc(s.handleBindOIDCStart), s.siteResolve, s.requireAuth, s.resolveSiteRole))
 
 	// 管理：站点与用户
-	mux.Handle("GET /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminListSites), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminCreateSite), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("PATCH /api/v1/admin/sites/{id}", chain(http.HandlerFunc(s.handleAdminUpdateSite), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites/{id}/rotate-key", chain(http.HandlerFunc(s.handleAdminRotateKey), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("GET /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminListAdmins), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminAddAdmin), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("DELETE /api/v1/admin/sites/{id}/admins/{userID}", chain(http.HandlerFunc(s.handleAdminRemoveAdmin), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("GET /api/v1/admin/overview", chain(http.HandlerFunc(s.handleAdminOverview), s.requireAuth, s.requirePasswordChanged))
-	mux.Handle("GET /api/v1/admin/users", chain(http.HandlerFunc(s.handleAdminListUsers), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("POST /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalBan), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
-	mux.Handle("DELETE /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalUnban), s.requireAuth, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminListSites), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites", chain(http.HandlerFunc(s.handleAdminCreateSite), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("PATCH /api/v1/admin/sites/{id}", chain(http.HandlerFunc(s.handleAdminUpdateSite), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites/{id}/rotate-key", chain(http.HandlerFunc(s.handleAdminRotateKey), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminListAdmins), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/sites/{id}/admins", chain(http.HandlerFunc(s.handleAdminAddAdmin), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("DELETE /api/v1/admin/sites/{id}/admins/{userID}", chain(http.HandlerFunc(s.handleAdminRemoveAdmin), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("GET /api/v1/admin/overview", chain(http.HandlerFunc(s.handleAdminOverview), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged))
+	mux.Handle("GET /api/v1/admin/users", chain(http.HandlerFunc(s.handleAdminListUsers), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalBan), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("DELETE /api/v1/admin/users/{id}/ban", chain(http.HandlerFunc(s.handleAdminGlobalUnban), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+
+	// 管理：管理员账号
+	mux.Handle("GET /api/v1/admin/local-admins", chain(http.HandlerFunc(s.handleAdminListLocalAdmins), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/local-admins", chain(http.HandlerFunc(s.handleAdminCreateLocalAdmin), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/local-admins/open", chain(http.HandlerFunc(s.handleAdminOpenLocalCredential), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("POST /api/v1/admin/local-admins/{userID}/password/reset", chain(http.HandlerFunc(s.handleAdminResetLocalPassword), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
+	mux.Handle("PUT /api/v1/admin/users/{userID}/superadmin", chain(http.HandlerFunc(s.handleAdminSetSuperadmin), s.requireAuth, s.requireLocalSession, s.requirePasswordChanged, s.requireSuperadmin))
 
 	// 管理：站点级审核与提供商
 	mux.Handle("GET /api/v1/admin/sites/{siteID}/queue", s.adminSite(s.handleAdminQueue))
@@ -120,7 +128,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) adminSite(h http.HandlerFunc) http.Handler {
-	return chain(h, s.requireAuth, s.requirePasswordChanged)
+	return chain(h, s.requireAuth, s.requireLocalSession, s.requirePasswordChanged)
 }
 
 func itoa(v int64) string { return strconv.FormatInt(v, 10) }

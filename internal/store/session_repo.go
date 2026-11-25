@@ -9,7 +9,7 @@ import (
 	"github.com/Bin-hy/zhupi/internal/domain"
 )
 
-const sessionColumns = `id, token_hash, user_id, user_agent, ip, created_at, expires_at, last_seen_at, revoked_at`
+const sessionColumns = `id, token_hash, user_id, auth_method, user_agent, ip, created_at, expires_at, last_seen_at, revoked_at`
 
 func scanSession(row interface{ Scan(...any) error }) (domain.Session, error) {
 	var (
@@ -19,7 +19,7 @@ func scanSession(row interface{ Scan(...any) error }) (domain.Session, error) {
 		last    int64
 		revoked sql.NullInt64
 	)
-	if err := row.Scan(&s.ID, &s.TokenHash, &s.UserID, &s.UserAgent, &s.IP,
+	if err := row.Scan(&s.ID, &s.TokenHash, &s.UserID, &s.AuthMethod, &s.UserAgent, &s.IP,
 		&created, &expires, &last, &revoked); err != nil {
 		return domain.Session{}, err
 	}
@@ -41,10 +41,14 @@ func (s *Store) CreateSession(ctx context.Context, sess domain.Session) error {
 	if sess.LastSeenAt.IsZero() {
 		sess.LastSeenAt = sess.CreatedAt
 	}
+	method := sess.AuthMethod
+	if method == "" {
+		method = domain.AuthMethodLegacy
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO sessions (token_hash, user_id, user_agent, ip, created_at, expires_at, last_seen_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		sess.TokenHash, sess.UserID, sess.UserAgent, sess.IP,
+		INSERT INTO sessions (token_hash, user_id, auth_method, user_agent, ip, created_at, expires_at, last_seen_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		sess.TokenHash, sess.UserID, method, sess.UserAgent, sess.IP,
 		toUnix(sess.CreatedAt), toUnix(sess.ExpiresAt), toUnix(sess.LastSeenAt))
 	return err
 }

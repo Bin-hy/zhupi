@@ -68,7 +68,12 @@ http://127.0.0.1:5173
 ./bin/zhupi admin site remove-admin --site <siteKey> --user <GitHub 登录名或用户 ID>
 ```
 
-也可以由超级管理员在管理后台的站点详情页操作。
+也可以由超级管理员在管理后台的站点详情页操作。站点管理员还需要开通本地密码才能
+登录后台，可在「管理员账号」页或执行：
+
+```bash
+./bin/zhupi admin users open --user-id <id> --username <name>
+```
 
 ## 修改站点设置
 

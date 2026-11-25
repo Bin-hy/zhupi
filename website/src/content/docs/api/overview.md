@@ -75,7 +75,7 @@ Vary: Origin
 | `user_banned` | 403 | 账号被全局封禁 |
 | `rate_limited` | 429 | 触发限流 |
 | `validation_error` | 400 | 参数不合法或请求体过大 |
-| `password_change_required` | 403 | 本地超管首次登录未改密 |
+| `password_change_required` | 403 | 本地管理员首次登录未改密 |
 
 ## 限流
 

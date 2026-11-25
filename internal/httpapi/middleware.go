@@ -102,6 +102,18 @@ func (s *Server) requireSiteNotBanned(next http.Handler) http.Handler {
 	})
 }
 
+// requireLocalSession 只允许通过本地账号密码登录建立的会话访问管理 API。
+func (s *Server) requireLocalSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess, ok := SessionFrom(r.Context())
+		if !ok || sess.AuthMethod != domain.AuthMethodLocal {
+			s.writeErr(w, r, domain.Forbidden("admin_local_auth_required", "请使用本地账号密码登录后台"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) requireSuperadmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := PrincipalFrom(r.Context())

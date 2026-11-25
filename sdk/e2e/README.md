@@ -31,6 +31,9 @@ SITE_KEY=xxx PAGE=http://127.0.0.1:15174/某篇文章 CHROME_PATH=/path/to/chrom
 
 # orphan 重定位与筛选
 SITE_KEY=xxx CHROME_PATH=/path/to/chrome npm run e2e:relocate
+
+# 评论面板：服务端搜索、排序、回复与草稿
+SITE_KEY=xxx CHROME_PATH=/path/to/chrome npm run e2e:comments
 ```
 
 > 脚本会创建临时用户与批注，建议使用独立的测试数据库。

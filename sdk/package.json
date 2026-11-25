@@ -46,7 +46,8 @@
     "e2e:plain": "node e2e/plain.mjs",
     "e2e:vitepress": "node e2e/vitepress.mjs",
     "e2e:account": "node e2e/account-mobile.mjs",
-    "e2e:relocate": "node e2e/relocate.mjs"
+    "e2e:relocate": "node e2e/relocate.mjs",
+    "e2e:comments": "node e2e/comment-panel.mjs"
   },
   "devDependencies": {
     "@apache-annotator/dom": "^0.2.0",

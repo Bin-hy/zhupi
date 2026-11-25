@@ -64,13 +64,15 @@ describe('AnnotationClient extensions', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const client = new AnnotationClient('http://api.test', 'site-key')
-    const result = await client.listAnnotations('/a b', 'resolved', 10, 20)
+    const result = await client.listAnnotations('/a b', 'resolved', 10, 20, 'newest', '引用 & 正文')
     expect(result.total).toBe(5)
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('page=%2Fa%20b')
     expect(url).toContain('filter=resolved')
     expect(url).toContain('cursor=10')
     expect(url).toContain('limit=20')
+    expect(url).toContain('sort=newest')
+    expect(url).toContain(`q=${encodeURIComponent('引用 & 正文')}`)
   })
 
   it('sends anchor update body', async () => {

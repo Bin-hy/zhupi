@@ -77,6 +77,7 @@ export class AnnotationInstance {
   private selectedQuote = ''
   private cleanupHighlights: (() => void) | null = null
   private selectionTimer: number | undefined
+  private searchTimer: number | undefined
   private stopThemeWatch: (() => void) | null = null
   private relocateTargetId: number | null = null
   private relocating = false
@@ -191,7 +192,12 @@ export class AnnotationInstance {
   async setPage(page: { pageKey?: string; pageTitle?: string }): Promise<void> {
     this.pageKey = normalizePageKey(page.pageKey ?? location.pathname)
     this.pageTitle = page.pageTitle ?? document.title
-    this.state = mergeState(this.state, { lastSeenAt: this.readLastSeen(), unreadIds: new Set() })
+    window.clearTimeout(this.searchTimer)
+    this.state = mergeState(this.state, {
+      lastSeenAt: this.readLastSeen(),
+      unreadIds: new Set(),
+      search: '',
+    })
     this.ui.setComposerDraftKey(this.draftKey())
     this.savedRange = null
     this.selectedQuote = ''
@@ -270,6 +276,7 @@ export class AnnotationInstance {
     document.removeEventListener('click', this.onDocumentClick)
     document.removeEventListener('keydown', this.onKeydown)
     if (this.selectionTimer) window.clearTimeout(this.selectionTimer)
+    if (this.searchTimer) window.clearTimeout(this.searchTimer)
     this.stopThemeWatch?.()
     if (this.cleanupHighlights) {
       this.cleanupHighlights()
@@ -308,6 +315,7 @@ export class AnnotationInstance {
         reset ? 0 : this.state.nextCursor,
         limit,
         this.state.sort,
+        this.state.search,
       )
       if (seq !== this.loadSeq) return
       const annotations = reset
@@ -362,6 +370,10 @@ export class AnnotationInstance {
   private changeSearch(query: string): void {
     this.state = mergeState(this.state, { search: query, activeId: null })
     this.commitState()
+    window.clearTimeout(this.searchTimer)
+    this.searchTimer = window.setTimeout(() => {
+      void this.loadList(true)
+    }, 300)
   }
 
   private async changeSort(sort: SortMode): Promise<void> {

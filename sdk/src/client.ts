@@ -121,9 +121,11 @@ export class AnnotationClient {
     cursor = 0,
     limit = 50,
     sort: AnnotationSort = 'position',
+    keyword = '',
   ): Promise<AnnotationListResult> {
+    const search = keyword.trim() ? `&q=${encodeURIComponent(keyword.trim())}` : ''
     return this.request(
-      `/api/v1/annotations?page=${encodeURIComponent(pageKey)}&filter=${filter}&sort=${sort}&cursor=${cursor}&limit=${limit}`,
+      `/api/v1/annotations?page=${encodeURIComponent(pageKey)}&filter=${filter}&sort=${sort}&cursor=${cursor}&limit=${limit}${search}`,
     )
   }
 

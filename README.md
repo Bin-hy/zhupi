@@ -13,6 +13,7 @@ Self-hosted, embeddable text annotation and inline comments for any web page.
 [![文档](https://img.shields.io/badge/文档-zhupi.pages.dev-c92a2a?style=flat-square)](https://zhupi.pages.dev)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white)](go.mod)
 [![SDK](https://img.shields.io/badge/SDK-v0.2.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](sdk/package.json)
+[![skills.sh](https://skills.sh/b/Bin-hy/zhupi)](https://skills.sh/Bin-hy/zhupi)
 [![Docker](https://img.shields.io/badge/GHCR-ghcr.io%2Fbin--hy%2Fzhupi-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/Bin-hy/zhupi/pkgs/container/zhupi)
 [![License](https://img.shields.io/badge/License-MIT-2f9e44?style=flat-square)](LICENSE)
 
@@ -101,6 +102,14 @@ docker compose exec zhupi /app/zhupi admin site create \
 - [SDK 接入指南](https://zhupi.pages.dev/sdk/integration/)
 - [初始化选项](https://zhupi.pages.dev/sdk/options/)
 - [方法与事件](https://zhupi.pages.dev/sdk/methods-events/)
+
+### 让 AI 编码代理接入
+
+```bash
+npx skills add Bin-hy/zhupi --skill zhupi-integration
+```
+
+Skill 覆盖部署、创建站点、嵌入 SDK、SPA 路由与排错，安装与更新由 [skills.sh](https://skills.sh/Bin-hy/zhupi) 管理。
 
 ## 文档
 

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="朱批 zhupi logo">
+  <defs>
+    <linearGradient id="seal" x1="12" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e03131"/>
+      <stop offset="1" stop-color="#b02525"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#seal)"/>
+  <rect x="8" y="8" width="48" height="48" rx="9" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1.6"/>
+  <path d="M19 23h26M19 32h26M19 41h17" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".95"/>
+  <circle cx="45.5" cy="43.5" r="4.5" fill="#fff"/>
+</svg>

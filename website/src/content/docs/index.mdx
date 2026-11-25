@@ -1,0 +1,67 @@
+---
+title: 朱批 zhupi 官方文档
+description: 多站点、可嵌入的划线批注服务：自托管部署、SDK 接入、登录与审核、API 与 CLI 官方文档。
+template: splash
+hero:
+  tagline: 一个部署实例托管多个站点。任意 Web 前端接入一段脚本，就能选中文字、划线、批注与回复。
+  image:
+    file: ../../assets/logo.svg
+    alt: 朱批 zhupi
+  actions:
+    - text: 快速开始
+      link: /getting-started/quick-start/
+      icon: rocket
+      variant: primary
+    - text: 接入 SDK
+      link: /sdk/integration/
+      icon: code-branch
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## 从这里开始
+
+<CardGrid stagger>
+	<Card title="5 分钟跑起来" icon="rocket">
+		Docker Compose 拉起服务，创建站点，拿到 siteKey，打开示例页面完成第一条批注。
+		[快速开始 →](/getting-started/quick-start/)
+	</Card>
+	<Card title="接入你的网站" icon="code-branch">
+		`<script>` 一行引入，或通过 `zhupi-sdk` 走 ESM；支持 SPA、暗色主题、中英文与深链接。
+		[SDK 接入 →](/sdk/integration/)
+	</Card>
+	<Card title="多站点隔离" icon="padlock">
+		公开 siteKey + 来源白名单，批注、评论、管理员与审核队列按站点隔离。
+		[站点管理 →](/sites/manage/)
+	</Card>
+	<Card title="登录与审核" icon="comment">
+		GitHub OAuth、每站点 OIDC、本地超管兜底；先发后审 / 先审后发两种模式。
+		[登录与身份 →](/sites/authentication/)
+	</Card>
+	<Card title="API 与 CLI" icon="setting">
+		公共批注 API、管理 API、健康检查，以及站点、提供商、超管等命令行工具。
+		[API 概览 →](/api/overview/)
+	</Card>
+	<Card title="架构与安全" icon="open-book">
+		单二进制 + SQLite(WAL) + 内嵌 SDK/管理后台；Bearer token 哈希存储、OIDC secret 加密。
+		[架构与数据模型 →](/development/architecture/)
+	</Card>
+</CardGrid>
+
+## 它是什么
+
+朱批是一个**自托管**的划线批注服务：把「选中文字 → 划线 → 批注与回复」嵌入到博客、文档站、知识库或任何 Web 页面中。它不是 SaaS，也不替你做托管；你部署一个实例，就能为多个站点提供批注能力。
+
+| 特性 | 说明 |
+| --- | --- |
+| 多站点 | 一个实例托管多个站点，按 siteKey 与 Origin 白名单隔离 |
+| 可嵌入 | Shadow DOM UI，不污染宿主样式；支持 `<script>` 与 ESM |
+| 自托管友好 | 单 Go 二进制，内嵌 SDK 与管理后台，SQLite 单文件存储 |
+| 登录 | 全局 GitHub OAuth + 每站点 OIDC + 本地超管兜底 |
+| 治理 | 超管 / 站点管理员两级权限，审核队列、封禁、先审后发 |
+| MIT | 代码与 SDK 均为 MIT 许可 |
+
+:::note[名字]
+「朱批」取自古人用朱笔在书页、奏折上圈点批注：红笔划过重点，批语留在页边。和同门的 **yufu（鱼符）** 一样，用一个有身份的古物指代产品本质——鱼符管身份，朱批管批注。
+:::

@@ -1,0 +1,31 @@
+:root {
+	--sl-color-accent-low: #ffe3e3;
+	--sl-color-accent: #c92a2a;
+	--sl-color-accent-high: #862e2e;
+	--sl-color-text-accent: #c92a2a;
+	--sl-font:
+		system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC',
+		'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+	--sl-font-mono:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+		monospace;
+}
+
+:root[data-theme='dark'] {
+	--sl-color-accent-low: #421010;
+	--sl-color-accent: #ff6b6b;
+	--sl-color-accent-high: #ffc9c9;
+	--sl-color-text-accent: #ff8787;
+}
+
+.hero img {
+	filter: drop-shadow(0 12px 30px rgb(201 42 42 / 0.22));
+}
+
+.sl-markdown-content table {
+	font-size: var(--sl-text-sm);
+}
+
+.sl-markdown-content code:not(pre code) {
+	word-break: break-word;
+}

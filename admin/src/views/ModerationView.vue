@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
 import type {
@@ -12,6 +12,7 @@ import type {
   Queue,
 } from '../api/types'
 import { auth } from '../stores/auth'
+import { scheduleModerationBadgeRefresh } from '../stores/moderation'
 import EmptyState from '../components/EmptyState.vue'
 import ErrorState from '../components/ErrorState.vue'
 import LoadMore from '../components/LoadMore.vue'
@@ -25,6 +26,7 @@ type TableRow = Record<PropertyKey, any>
 type RowLike = TableRow | Annotation | AnnotationBrief | Comment | ModerationComment
 
 const route = useRoute()
+const router = useRouter()
 const siteId = ref<number | undefined>(undefined)
 const status = ref<Status>('pending')
 const typeFilter = ref<TypeFilter>('all')
@@ -48,6 +50,8 @@ const contextVisible = ref(false)
 const contextLoading = ref(false)
 const contextError = ref('')
 const contextAnnotation = ref<Annotation | null>(null)
+const contextFocusId = ref<number | null>(null)
+const contextTitle = ref('批注上下文')
 
 let searchTimer: number | undefined
 let lastQueryKey = ''
@@ -80,6 +84,12 @@ const statusTotals = computed<Record<Status, number>>(() => ({
   rejected: counts.value.annotations.rejected + counts.value.comments.rejected,
 }))
 
+const typeTotals = computed<Record<TypeFilter, number>>(() => ({
+  all: statusTotals.value[status.value],
+  annotation: counts.value.annotations[status.value],
+  comment: counts.value.comments[status.value],
+}))
+
 const annotationBulkActions = computed(() => commonActions(selectedAnnotations.value))
 const commentBulkActions = computed(() => commonActions(selectedComments.value))
 
@@ -94,6 +104,7 @@ function queryKey(): string {
 }
 
 function initFromRoute(): void {
+  window.clearTimeout(searchTimer)
   const fromQuery = Number(route.query.site)
   siteId.value = sites.value.some((site) => site.id === fromQuery) ? fromQuery : sites.value[0]?.id
   const fromStatus = String(route.query.status || '')
@@ -104,7 +115,18 @@ function initFromRoute(): void {
   typeFilter.value = typeOptions.some((option) => option.value === fromType)
     ? (fromType as TypeFilter)
     : 'all'
+  const fromKeyword = String(route.query.q || '')
+  searchInput.value = fromKeyword
+  keyword.value = fromKeyword.trim()
   lastQueryKey = queryKey()
+}
+
+function syncQuery(): void {
+  if (!siteId.value) return
+  const query: Record<string, string> = { site: String(siteId.value), status: status.value }
+  if (typeFilter.value !== 'all') query.type = typeFilter.value
+  if (keyword.value) query.q = keyword.value
+  void router.replace({ path: '/moderation', query })
 }
 
 async function load(reset = true): Promise<void> {
@@ -151,6 +173,7 @@ async function load(reset = true): Promise<void> {
     if (wantAnnotations) annotationCursor.value = queue.annotationCursor
     if (wantComments) commentCursor.value = queue.commentCursor
     counts.value = queue.counts
+    if (reset) scheduleModerationBadgeRefresh()
   } catch (err: any) {
     error.value = err?.message || '加载审核列表失败'
   } finally {
@@ -204,6 +227,10 @@ function commentPageTitle(raw: RowLike): string {
 function commentPageKey(raw: RowLike): string {
   const row = raw as ModerationComment
   return row.parent?.pageKey || ''
+}
+
+function parentBody(raw: RowLike): string {
+  return (raw as ModerationComment).parent?.body || ''
 }
 
 function parentWarning(raw: RowLike): string {
@@ -260,13 +287,18 @@ function onCommentSelection(rows: ModerationComment[]): void {
 async function openContext(raw: RowLike): Promise<void> {
   if (!siteId.value) return
   const row = raw as Annotation | ModerationComment
-  const annotationId = (row as ModerationComment).annotationId || (row as Annotation).id
+  const comment = row as ModerationComment
+  const annotationId = comment.annotationId || (row as Annotation).id
+  contextFocusId.value = comment.annotationId ? comment.id : null
+  contextTitle.value = comment.annotationId ? '评论上下文' : '批注上下文'
   contextVisible.value = true
   contextLoading.value = true
   contextError.value = ''
   contextAnnotation.value = null
   try {
     contextAnnotation.value = await api.annotationDetail(siteId.value, annotationId)
+    await nextTick()
+    document.querySelector('.el-drawer .thread-item.focus')?.scrollIntoView({ block: 'center' })
   } catch (err: any) {
     contextError.value = err?.message || '加载上下文失败'
   } finally {
@@ -342,6 +374,7 @@ async function moderate(
       if (target) shiftCount(kind, item.moderation, target)
     }
     applyLocal(kind, id, action)
+    scheduleModerationBadgeRefresh()
     ElMessage.success('已处理')
   } catch (err: any) {
     ElMessage.error(err?.message || '操作失败')
@@ -382,6 +415,7 @@ watch([siteId, status, typeFilter, keyword], () => {
   if (key === lastQueryKey) return
   lastQueryKey = key
   void load(true)
+  syncQuery()
 })
 
 watch(
@@ -433,6 +467,7 @@ onBeforeUnmount(() => {
         <el-radio-group v-model="typeFilter">
           <el-radio-button v-for="option in typeOptions" :key="option.value" :value="option.value">
             {{ option.label }}
+            <span class="tab-count">{{ typeTotals[option.value] }}</span>
           </el-radio-button>
         </el-radio-group>
         <el-input
@@ -565,6 +600,9 @@ onBeforeUnmount(() => {
                   <div class="content-cell">
                     <p class="body">{{ row.content }}</p>
                     <blockquote v-if="row.parent" class="quote">「{{ row.parent.quoteExact }}」</blockquote>
+                    <p v-if="parentBody(row)" class="parent-body">
+                      批注正文：{{ parentBody(row) }}
+                    </p>
                     <div class="sub">
                       <span>{{ row.author.name }}</span>
                       <span>·</span>
@@ -626,7 +664,7 @@ onBeforeUnmount(() => {
       </template>
     </template>
 
-    <el-drawer v-model="contextVisible" title="批注上下文" size="520px">
+    <el-drawer v-model="contextVisible" :title="contextTitle" size="520px">
       <div v-loading="contextLoading" class="context-body">
         <el-alert v-if="contextError" :title="contextError" type="error" :closable="false" />
         <template v-else-if="contextAnnotation">
@@ -650,7 +688,12 @@ onBeforeUnmount(() => {
             <span>· {{ formatTime(contextAnnotation.createdAt) }}</span>
           </div>
           <div class="thread">
-            <div v-for="(comment, index) in contextAnnotation.comments || []" :key="comment.id" class="thread-item">
+            <div
+              v-for="(comment, index) in contextAnnotation.comments || []"
+              :key="comment.id"
+              class="thread-item"
+              :class="{ focus: comment.id === contextFocusId }"
+            >
               <div class="thread-meta">
                 <span class="thread-author">{{ comment.author.name }}</span>
                 <span>{{ formatTime(comment.createdAt) }}</span>
@@ -729,6 +772,16 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.parent-body {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .sub {
   display: flex;
   align-items: center;
@@ -778,6 +831,11 @@ onBeforeUnmount(() => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   background: var(--el-fill-color-blank);
+}
+.thread-item.focus {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-8);
 }
 .thread-meta {
   display: flex;

@@ -97,6 +97,7 @@ export type AnnotationBrief = {
   pageKey: string
   pageTitle: string
   quoteExact: string
+  body?: string
   section?: string
   status: 'open' | 'resolved'
   moderation: 'pending' | 'approved' | 'rejected'

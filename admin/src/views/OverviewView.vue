@@ -7,6 +7,7 @@ import StatCard from '../components/StatCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ErrorState from '../components/ErrorState.vue'
 import { formatTime } from '../utils/format'
+import { moderationBadge } from '../stores/moderation'
 
 const router = useRouter()
 const overview = ref<Overview | null>(null)
@@ -22,6 +23,7 @@ async function load(): Promise<void> {
   error.value = ''
   try {
     overview.value = await api.overview()
+    moderationBadge.pending = pendingTotal.value
   } catch (err: any) {
     error.value = err?.message || '加载概览失败'
   } finally {

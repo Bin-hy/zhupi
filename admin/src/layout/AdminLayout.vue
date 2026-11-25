@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Menu, Moon, Setting, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
 import { auth, isSuperadmin, logout } from '../stores/auth'
+import { moderationBadge, refreshModerationBadge } from '../stores/moderation'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +45,7 @@ onMounted(() => {
     dark.value = saved === '1'
     document.documentElement.classList.toggle('dark', dark.value)
   }
+  void refreshModerationBadge()
 })
 </script>
 
@@ -57,7 +59,12 @@ onMounted(() => {
       <el-menu :collapse="collapsed" :default-active="active" @select="onSelect">
         <el-menu-item index="/">概览</el-menu-item>
         <el-menu-item index="/sites">站点</el-menu-item>
-        <el-menu-item index="/moderation">内容审核</el-menu-item>
+        <el-menu-item index="/moderation">
+          内容审核
+          <span v-if="!collapsed && moderationBadge.pending" class="nav-badge">
+            {{ moderationBadge.pending > 99 ? '99+' : moderationBadge.pending }}
+          </span>
+        </el-menu-item>
         <el-menu-item v-if="isSuperadmin()" index="/users">用户管理</el-menu-item>
       </el-menu>
     </el-aside>
@@ -135,6 +142,17 @@ onMounted(() => {
   gap: 6px;
   cursor: pointer;
   font-size: 14px;
+}
+.nav-badge {
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
 }
 .main {
   background: var(--el-bg-color-page);

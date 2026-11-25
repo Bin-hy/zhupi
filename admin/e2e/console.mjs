@@ -60,6 +60,21 @@ const annotationResp = await fetch(`${BASE}/api/v1/annotations`, {
   }),
 })
 if (!annotationResp.ok) throw new Error(`create annotation failed: ${annotationResp.status}`)
+const annotation = await annotationResp.json()
+if (!annotation.id) throw new Error(`create annotation returned no id: ${JSON.stringify(annotation)}`)
+
+const pendingComment = `admin pending comment ${stamp}`
+const commentResp = await fetch(`${BASE}/api/v1/annotations/${annotation.id}/comments`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Site-Key': site.key,
+    Origin: origin,
+    Authorization: `Bearer ${pendingUser.token}`,
+  },
+  body: JSON.stringify({ content: pendingComment }),
+})
+if (!commentResp.ok) throw new Error(`create comment failed: ${commentResp.status}`)
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true })
 try {
@@ -79,6 +94,8 @@ try {
   const cards = await page.locator('.stat-card').count()
   console.log('1) 概览统计卡片:', cards)
   if (cards !== 6) throw new Error('expected 6 stat cards')
+  await page.waitForSelector('.nav-badge', { timeout: 30000 })
+  console.log('1b) 侧边栏待审角标:', await page.locator('.nav-badge').innerText())
 
   await page.locator('.el-menu-item', { hasText: '站点' }).click()
   await page.waitForSelector('.el-table__row', { timeout: 30000 })
@@ -97,11 +114,41 @@ try {
     waitUntil: 'domcontentloaded',
     timeout: 120000,
   })
-  const row = page.locator('.el-table__row', { hasText: pendingContent })
+  const annotationTable = page.locator('.el-table').first()
+  const row = annotationTable.locator('.el-table__row', { hasText: pendingContent })
   await row.waitFor({ timeout: 30000 })
   await row.getByRole('button', { name: '通过' }).click()
-  await page.waitForSelector(`text=${pendingContent}`, { state: 'detached', timeout: 30000 })
+  await row.waitFor({ state: 'detached', timeout: 30000 })
   console.log('4) 审核通过完成')
+
+  await page.goto(`${BASE}/admin/moderation?site=${site.id}&status=pending&type=comment`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120000,
+  })
+  const commentRow = page.locator('.el-table__row', { hasText: pendingComment })
+  await commentRow.waitFor({ timeout: 30000 })
+  const commentRowText = await commentRow.innerText()
+  if (!commentRowText.includes(pendingContent)) throw new Error('comment row missing parent quote')
+  if (!commentRowText.includes('pending annotation for admin console')) {
+    throw new Error('comment row missing parent body')
+  }
+  await commentRow.getByRole('button', { name: '上下文' }).click()
+  await page.waitForSelector('.el-drawer', { timeout: 15000 })
+  await page.waitForFunction(
+    () => document.querySelectorAll('.el-drawer .thread-item').length >= 2,
+    null,
+    { timeout: 15000 },
+  )
+  const drawerText = await page.locator('.el-drawer').innerText()
+  if (!drawerText.includes('pending annotation for admin console') || !drawerText.includes(pendingComment)) {
+    throw new Error('context drawer missing thread content')
+  }
+  const focusedThread = await page.locator('.el-drawer .thread-item.focus').innerText()
+  if (!focusedThread.includes(pendingComment)) throw new Error('context drawer did not focus the selected comment')
+  await page.keyboard.press('Escape')
+  await commentRow.getByRole('button', { name: '通过' }).click()
+  await commentRow.waitFor({ state: 'detached', timeout: 30000 })
+  console.log('4b) 评论上下文与审核完成')
 
   await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded', timeout: 120000 })
   const userRow = page.locator('.el-table__row', { hasText: `e2e-pending-${stamp}` })

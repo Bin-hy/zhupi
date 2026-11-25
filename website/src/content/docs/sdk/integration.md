@@ -137,6 +137,25 @@ export default {
 
 VitePress 的 `router.onAfterRouteChanged` 或主题的 `watch` 中调用 `setPage` 即可；VitePress 的正文容器是 `.vp-doc`。
 
+## 不同站点的接入位置
+
+朱批不绑定特定技术栈。只要站点能提供一块稳定的正文容器，就可以接入：
+
+| 站点类型 | 接入要点 |
+| --- | --- |
+| Hexo / Hugo / Jekyll / Astro | 全站引入脚本，用 `selectRoot` 指定文章正文 |
+| VitePress / Docusaurus / Starlight | 指定 `pageKey`；客户端路由切换时调用 `setPage()` |
+| Vue / React / Next.js / Nuxt | 使用 ESM SDK，在组件或路由生命周期中初始化与销毁 |
+| Wiki / 知识库 / 在线阅读器 | 保持 `pageKey` 稳定，利用文本引用与模糊重定位跟随内容更新 |
+| 任意静态页面 | 一段 `<script>` 即可，不需要现有后端配合 |
+
+接入时通常只需要确认四件事：
+
+1. 在 zhupi 后台创建站点，并把站点域名加入 Origin 白名单；
+2. 用 `selectRoot` 限定允许划词的正文区域；
+3. 用稳定的 `pageKey` 标识文章或文档页面；
+4. SPA 路由变化时调用 `await instance.setPage(...)`。
+
 ## 验证接入
 
 1. 打开页面，选中正文文字，应出现浮动的「批注」按钮。

@@ -114,6 +114,24 @@ npm test
 
 `.github/workflows/ci.yml` 目前只运行 SDK 的 `typecheck`、`test`、`build` 与 `verify`。**Go 与管理后台测试需要在本地执行**，或在 PR 前手动跑上面的命令。
 
+## 文档站
+
+```bash
+cd website
+npm install
+npm run dev        # http://localhost:4321
+npm run build      # 产物 dist/
+```
+
+Cloudflare Pages 配置：
+
+| 配置 | 值 |
+| --- | --- |
+| Root directory | `website` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Node.js | `22.23.4` |
+
 ## 新增功能的位置
 
 | 改动 | 位置 |

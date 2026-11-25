@@ -80,6 +80,7 @@ onMounted(load)
     </div>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <el-table v-loading="loading" :data="providers" border>
+      <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="name" label="名称" min-width="130" />
       <el-table-column prop="issuer" label="Issuer" min-width="200" show-overflow-tooltip />
       <el-table-column prop="clientId" label="Client ID" min-width="150" show-overflow-tooltip />

@@ -18,6 +18,20 @@ const form = reactive({
 })
 const saving = ref(false)
 const editing = computed(() => !!props.provider)
+const callbackUrl = computed(() =>
+  props.provider
+    ? `${window.location.origin}/api/v1/auth/oidc/${props.provider.id}/callback`
+    : '',
+)
+
+async function copyCallback(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(callbackUrl.value)
+    ElMessage.success('回调地址已复制')
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
 
 watch(
   () => [props.modelValue, props.provider],
@@ -104,6 +118,16 @@ async function submit(): Promise<void> {
       </el-form-item>
       <el-form-item label="Client ID" required>
         <el-input v-model="form.clientId" />
+      </el-form-item>
+      <el-form-item v-if="props.provider" label="Provider ID">
+        <el-input :model-value="String(props.provider.id)" readonly />
+      </el-form-item>
+      <el-form-item v-if="props.provider" label="回调地址">
+        <el-input :model-value="callbackUrl" readonly>
+          <template #append>
+            <el-button @click="copyCallback">复制</el-button>
+          </template>
+        </el-input>
       </el-form-item>
       <el-form-item label="Client Secret" :required="!editing">
         <el-input
